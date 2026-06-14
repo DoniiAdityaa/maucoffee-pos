@@ -105,6 +105,8 @@ dependencies:
   jiffy: ^6.4.5
   go_router: ^17.3.0
   timeago: ^3.7.1
+  mobile_scanner: ^7.2.0
+  qr_flutter: ^4.1.0
 
   
  
