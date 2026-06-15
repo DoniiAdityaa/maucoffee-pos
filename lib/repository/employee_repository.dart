@@ -4,12 +4,13 @@ import 'package:maucoffee/model/employee_model.dart';
 class EmployeeRepository {
   final _client = Supabase.instance.client;
 
-  // Mengambil daftar karyawan aktif
+  // Mengambil daftar karyawan aktif milik admin saat ini
   Future<List<EmployeeModel>> getEmployees() async {
     try {
       final response = await _client
           .from('employees')
           .select()
+          .eq('admin_id', _client.auth.currentUser?.id ?? '')
           .order('name', ascending: true);
 
       return (response as List)
@@ -24,12 +25,30 @@ class EmployeeRepository {
   Future<void> addEmployee(EmployeeModel employee) async {
     try {
       final json = employee.toJson();
-      json.remove('id');
+      // JANGAN hapus 'id' karena kita menggunakan device_uuid sebagai primary key id
       json.remove('created_at');
+      // Set admin_id jika belum diset
+      json['admin_id'] ??= _client.auth.currentUser?.id;
 
       await _client.from('employees').insert(json);
     } catch (e) {
       throw Exception('Gagal menambah karyawan: $e');
+    }
+  }
+
+  // Mengambil data karyawan berdasarkan ID (device_uuid)
+  Future<EmployeeModel?> getEmployeeById(String id) async {
+    try {
+      final response = await _client
+          .from('employees')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return EmployeeModel.fromJson(response);
+    } catch (e) {
+      return null;
     }
   }
 

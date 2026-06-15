@@ -4,12 +4,14 @@ import 'package:maucoffee/model/category_model.dart';
 class CategoryRepository {
   final _client = Supabase.instance.client;
 
-  // Mengambil semua kategori dari database
-  Future<List<CategoryModel>> getCategories() async {
+  // Mengambil kategori berdasarkan ID Admin
+  Future<List<CategoryModel>> getCategories({String? adminId}) async {
     try {
+      final targetAdminId = adminId ?? _client.auth.currentUser?.id ?? '';
       final response = await _client
           .from('categories')
           .select()
+          .eq('admin_id', targetAdminId)
           .order('name', ascending: true);
 
       return (response as List)
@@ -20,10 +22,14 @@ class CategoryRepository {
     }
   }
 
-  // Menambah kategori baru (jika dibutuhkan)
-  Future<void> addCategory(String name) async {
+  // Menambah kategori baru
+  Future<void> addCategory(String name, {String? adminId}) async {
     try {
-      await _client.from('categories').insert({'name': name});
+      final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+      await _client.from('categories').insert({
+        'name': name,
+        'admin_id': targetAdminId,
+      });
     } catch (e) {
       throw Exception('Gagal menambah kategori: $e');
     }

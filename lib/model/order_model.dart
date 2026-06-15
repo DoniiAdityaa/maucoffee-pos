@@ -5,6 +5,7 @@ part 'order_model.g.dart';
 @JsonSerializable(fieldRename: FieldRename.snake)
 class OrderModel {
   final String? id;
+  final String? adminId;
   final String invoiceNumber;
   final double totalAmount;
   final String paymentMethod; // 'Cash', 'QRIS', 'Card'
@@ -16,6 +17,7 @@ class OrderModel {
 
   OrderModel({
     this.id,
+    this.adminId,
     required this.invoiceNumber,
     required this.totalAmount,
     required this.paymentMethod,

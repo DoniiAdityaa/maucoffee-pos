@@ -4,12 +4,14 @@ import 'package:maucoffee/model/product_model.dart';
 class ProductRepository {
   final _client = Supabase.instance.client;
 
-  // Mengambil seluruh produk yang tersedia
-  Future<List<ProductModel>> getProducts() async {
+  // Mengambil seluruh produk yang tersedia berdasarkan ID Admin
+  Future<List<ProductModel>> getProducts({String? adminId}) async {
     try {
+      final targetAdminId = adminId ?? _client.auth.currentUser?.id ?? '';
       final response = await _client
           .from('products')
           .select()
+          .eq('admin_id', targetAdminId)
           .order('name', ascending: true);
 
       return (response as List)
@@ -27,6 +29,8 @@ class ProductRepository {
       final json = product.toJson();
       json.remove('id');
       json.remove('created_at');
+      // Set admin_id jika belum diset
+      json['admin_id'] ??= _client.auth.currentUser?.id;
 
       await _client.from('products').insert(json);
     } catch (e) {

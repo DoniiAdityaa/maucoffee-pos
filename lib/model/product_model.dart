@@ -5,6 +5,7 @@ part 'product_model.g.dart';
 @JsonSerializable(fieldRename: FieldRename.snake)
 class ProductModel {
   final String? id;
+  final String? adminId;
   final String categoryId;
   final String name;
   final double price;
@@ -15,6 +16,7 @@ class ProductModel {
 
   ProductModel({
     this.id,
+    this.adminId,
     required this.categoryId,
     required this.name,
     required this.price,

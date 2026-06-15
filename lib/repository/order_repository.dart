@@ -6,12 +6,14 @@ import 'package:maucoffee/model/order_item_model.dart';
 class OrderRepository {
   final _client = Supabase.instance.client;
 
-  // 1. Mengambil riwayat transaksi (History)
-  Future<List<OrderModel>> getOrderHistory() async {
+  // 1. Mengambil riwayat transaksi (History) berdasarkan ID Admin
+  Future<List<OrderModel>> getOrderHistory({String? adminId}) async {
     try {
+      final targetAdminId = adminId ?? _client.auth.currentUser?.id ?? '';
       final response = await _client
           .from('orders')
           .select()
+          .eq('admin_id', targetAdminId)
           .order('created_at', ascending: false);
 
       return (response as List)
@@ -64,6 +66,8 @@ class OrderRepository {
       final orderJson = order.toJson();
       orderJson.remove('id');
       orderJson.remove('created_at');
+      // Set admin_id jika belum diset
+      orderJson['admin_id'] ??= _client.auth.currentUser?.id;
 
       final orderResponse = await _client
           .from('orders')

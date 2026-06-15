@@ -9,6 +9,7 @@ part of 'employee_model.dart';
 EmployeeModel _$EmployeeModelFromJson(Map<String, dynamic> json) =>
     EmployeeModel(
       id: json['id'] as String?,
+      adminId: json['admin_id'] as String?,
       name: json['name'] as String,
       role: json['role'] as String,
       phone: json['phone'] as String?,
@@ -22,6 +23,7 @@ EmployeeModel _$EmployeeModelFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$EmployeeModelToJson(EmployeeModel instance) =>
     <String, dynamic>{
       'id': instance.id,
+      'admin_id': instance.adminId,
       'name': instance.name,
       'role': instance.role,
       'phone': instance.phone,

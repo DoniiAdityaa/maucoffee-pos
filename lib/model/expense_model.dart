@@ -5,6 +5,7 @@ part 'expense_model.g.dart';
 @JsonSerializable(fieldRename: FieldRename.snake)
 class ExpenseModel {
   final String? id;
+  final String? adminId;
   final String title;
   final double amount;
   final String category; // 'Operational', 'Ingredients', 'Salary', 'Rent', etc.
@@ -13,6 +14,7 @@ class ExpenseModel {
 
   ExpenseModel({
     this.id,
+    this.adminId,
     required this.title,
     required this.amount,
     required this.category,

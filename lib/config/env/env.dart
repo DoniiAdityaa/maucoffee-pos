@@ -12,4 +12,7 @@ abstract class Env {
 
   @EnviedField(varName: 'SUPABASE_ANON_KEY', obfuscate: true)
   static String supabaseAnonKey = _Env.supabaseAnonKey;
+
+  @EnviedField(varName: 'GOOGLE_WEB_CLIENT_ID', obfuscate: true)
+  static String googleWebClientId = _Env.googleWebClientId;
 }

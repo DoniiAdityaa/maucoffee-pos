@@ -5,6 +5,7 @@ part 'employee_model.g.dart';
 @JsonSerializable(fieldRename: FieldRename.snake)
 class EmployeeModel {
   final String? id;
+  final String? adminId;
   final String name;
   final String role; // 'Admin', 'Cashier', 'Barista'
   final String? phone;
@@ -14,6 +15,7 @@ class EmployeeModel {
 
   EmployeeModel({
     this.id,
+    this.adminId,
     required this.name,
     required this.role,
     this.phone,

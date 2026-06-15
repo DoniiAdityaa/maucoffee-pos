@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/config/env/env.dart';
 import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
+import 'package:maucoffee/auth/role_selector_screen.dart';
+import 'package:maucoffee/home/admin_home_screen.dart';
+import 'package:maucoffee/home/employee_home_screen.dart';
 
 void main() async {
-  // Wajib dipanggil sebelum inisialisasi plugin/SDK asynchronous
   WidgetsFlutterBinding.ensureInitialized();
 
   // Inisialisasi Supabase
@@ -13,68 +16,42 @@ void main() async {
   // Inisialisasi service locator (GetIt)
   await setUpLocator();
 
-  runApp(const MyApp());
+  // Membaca status login saat ini untuk merutekan ke screen yang sesuai secara instan
+  final prefs = serviceLocator<UserPreference>();
+  final String? role = prefs.getLoginRole();
+  final bool hasAdminToken = prefs.getToken() != null;
+  final bool hasEmployeeData = prefs.getEmployee() != null;
+
+  Widget initialScreen;
+  if (role == 'admin' && hasAdminToken) {
+    initialScreen = const AdminHomeScreen();
+  } else if (role == 'employee' && hasEmployeeData) {
+    initialScreen = const EmployeeHomeScreen();
+  } else {
+    initialScreen = const RoleSelectorScreen();
+  }
+
+  runApp(MyApp(initialScreen: initialScreen));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Widget initialScreen;
+
+  const MyApp({
+    super.key,
+    required this.initialScreen,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Mau Coffee POS',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // PERBAIKAN: Tambah class 'ColorScheme' sebelum .fromSeed
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3DAFA5)),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Mau Coffee POS'),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          // PERBAIKAN: Tambah class 'MainAxisAlignment' sebelum .center
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+      home: initialScreen,
     );
   }
 }
