@@ -5,6 +5,7 @@ import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/auth/role_selector_screen.dart';
 import 'package:maucoffee/home/admin_home_screen.dart';
+import 'package:maucoffee/navigation/navigation.dart';
 import 'package:maucoffee/home/employee_home_screen.dart';
 
 void main() async {
@@ -24,7 +25,7 @@ void main() async {
 
   Widget initialScreen;
   if (role == 'admin' && hasAdminToken) {
-    initialScreen = const AdminHomeScreen();
+    initialScreen = const MainNavigation();
   } else if (role == 'employee' && hasEmployeeData) {
     initialScreen = const EmployeeHomeScreen();
   } else {
@@ -48,8 +49,12 @@ class MyApp extends StatelessWidget {
       title: 'Mau Coffee POS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3DAFA5)),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFE27D00),
+          brightness: Brightness.dark,
+        ),
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFF1C1207),
       ),
       home: initialScreen,
     );

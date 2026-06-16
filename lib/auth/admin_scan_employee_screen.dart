@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:maucoffee/auth/admin_add_employee_screen.dart';
 import 'package:maucoffee/ui/color.dart';
@@ -13,11 +15,36 @@ class AdminScanEmployeeScreen extends StatefulWidget {
       _AdminScanEmployeeScreenState();
 }
 
-class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen> {
+class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
+    with SingleTickerProviderStateMixin {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
   bool _isProcessed = false;
+
+  late AnimationController _overlayController;
+  late Animation<double> _overlayFade;
+
+  @override
+  void initState() {
+    super.initState();
+    _overlayController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _overlayFade = CurvedAnimation(
+      parent: _overlayController,
+      curve: Curves.easeOut,
+    );
+    _overlayController.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _overlayController.dispose();
+    super.dispose();
+  }
 
   void _onDetect(BarcodeCapture capture) {
     if (_isProcessed) return;
@@ -26,6 +53,7 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen> {
     if (barcodes.isNotEmpty) {
       final String? code = barcodes.first.rawValue;
       if (code != null && code.isNotEmpty) {
+        HapticFeedback.heavyImpact();
         setState(() {
           _isProcessed = true;
         });
@@ -38,15 +66,32 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen> {
   void _navigateToRegisterForm(String deviceUuid) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => AdminAddEmployeeScreen(deviceUuid: deviceUuid),
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            AdminAddEmployeeScreen(deviceUuid: deviceUuid),
+        transitionDuration: const Duration(milliseconds: 400),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final fade = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOut,
+          );
+          final slide = Tween<Offset>(
+            begin: const Offset(0, 0.06),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ));
+          return FadeTransition(
+            opacity: fade,
+            child: SlideTransition(position: slide, child: child),
+          );
+        },
       ),
     ).then((registered) {
       if (registered == true) {
-        // Jika registrasi sukses, kembali ke halaman dashboard admin
         Navigator.pop(context);
       } else {
-        // Jika batal, nyalakan kembali scan
         setState(() {
           _isProcessed = false;
         });
@@ -57,155 +102,342 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen> {
 
   void _showManualEntryDialog() {
     final TextEditingController textController = TextEditingController();
-    showDialog(
+    HapticFeedback.lightImpact();
+
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(borderRadius300),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        title: Text(
-          "Enter Device ID Manually",
-          style: mdBold.copyWith(color: textDarkPrimary),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Type the code shown on the employee's screen (e.g. emp-1781...)",
-              style: xsRegular.copyWith(color: textDarkSecondary),
-            ),
-            const SizedBox(height: spacing4),
-            TextField(
-              controller: textController,
-              decoration: InputDecoration(
-                hintText: "emp-xxxxxxxxxxxxxx",
-                hintStyle: sRegular.copyWith(color: textDarkTertiary),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(borderRadius200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(borderRadius200),
-                  borderSide: const BorderSide(color: primaryColor, width: 2),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              padding: const EdgeInsets.all(spacing7),
+              decoration: BoxDecoration(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
+                color: const Color(0xFF2A1A0A).withOpacity(0.95),
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 1,
+                  ),
                 ),
               ),
-              style: sMedium.copyWith(color: textDarkPrimary),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              "Cancel",
-              style: sMedium.copyWith(color: textDarkSecondary),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final String val = textController.text.trim();
-              if (val.isNotEmpty) {
-                Navigator.pop(context); // Tutup dialog
-                _navigateToRegisterForm(val);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(borderRadius200),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        color: Colors.white.withOpacity(0.15),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: spacing6),
+                  Text(
+                    "Enter Code Manually",
+                    style: lgBold.copyWith(
+                      color: Colors.white,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: spacing2),
+                  Text(
+                    "Type the code shown on the employee's screen",
+                    style: xsRegular.copyWith(
+                      color: Colors.white.withOpacity(0.4),
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: spacing6),
+                  // Input field
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      color: Colors.white.withOpacity(0.06),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.1),
+                      ),
+                    ),
+                    child: TextField(
+                      controller: textController,
+                      style: smMedium.copyWith(
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: "emp-xxxxxxxxxxxxxx",
+                        hintStyle: smRegular.copyWith(
+                          color: Colors.white.withOpacity(0.2),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: spacing5,
+                          vertical: spacing4,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.tag_rounded,
+                          color: const Color(0xFFE27D00).withOpacity(0.6),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: spacing5),
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            height: 50,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              color: Colors.white.withOpacity(0.06),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.08),
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              "Cancel",
+                              style: smBold.copyWith(
+                                color: Colors.white.withOpacity(0.5),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: spacing4),
+                      Expanded(
+                        flex: 2,
+                        child: GestureDetector(
+                          onTap: () {
+                            final String val = textController.text.trim();
+                            if (val.isNotEmpty) {
+                              Navigator.pop(context);
+                              _navigateToRegisterForm(val);
+                            }
+                          },
+                          child: Container(
+                            height: 50,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFFE27D00),
+                                  Color(0xFFD06A00),
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      const Color(0xFFE27D00).withOpacity(0.25),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              "Continue",
+                              style: smBold.copyWith(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(
+                      height: MediaQuery.of(context).padding.bottom + spacing4),
+                ],
               ),
             ),
-            child: Text("Continue", style: sBold.copyWith(color: Colors.white)),
           ),
-        ],
+        ),
       ),
     );
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          "Scan Employee QR",
-          style: mdBold.copyWith(color: Colors.white),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.flash_on),
-            onPressed: () => _controller.toggleTorch(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.camera),
-            onPressed: () => _controller.switchCamera(),
-          ),
-        ],
-      ),
       body: Stack(
         children: [
-          // 1. Scanner Camera
+          // 1. Scanner Camera (full-screen)
           MobileScanner(controller: _controller, onDetect: _onDetect),
 
-          // 2. Custom Overlay Frame (Scanner cutout)
+          // 2. Custom Overlay
           Container(
             decoration: ShapeDecoration(
               shape: QrScannerOverlayShape(
-                borderColor: primaryColor,
-                borderRadius: 16,
-                borderLength: 30,
-                borderWidth: 6,
+                borderColor: const Color(0xFFE27D00),
+                borderRadius: 20,
+                borderLength: 28,
+                borderWidth: 4,
                 cutOutSize: 260,
               ),
             ),
           ),
 
-          // 3. Instructions & Manual Entry Button
-          Positioned(
-            bottom: spacing8,
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                Text(
-                  "Align the QR code within the frame",
-                  style: sMedium.copyWith(color: Colors.white70),
-                ),
-                const SizedBox(height: spacing4),
-                ElevatedButton.icon(
-                  onPressed: _showManualEntryDialog,
-                  icon: const Icon(
-                    Icons.keyboard_alt_outlined,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    "Enter Code Manually",
-                    style: sBold.copyWith(color: Colors.white),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white.withOpacity(0.25),
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: spacing6,
-                      vertical: spacing4,
+          // 3. Top section — blurred header
+          FadeTransition(
+            opacity: _overlayFade,
+            child: Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    color: Colors.black.withOpacity(0.3),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          left: spacing3,
+                          right: spacing5,
+                          top: spacing2,
+                          bottom: spacing5,
+                        ),
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.pop(context);
+                              },
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withOpacity(0.12),
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_back_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: spacing4),
+                            Expanded(
+                              child: Text(
+                                "Scan Employee QR",
+                                style: mdBold.copyWith(
+                                  color: Colors.white,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => _controller.toggleTorch(),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withOpacity(0.12),
+                                ),
+                                child: const Icon(
+                                  Icons.flash_on_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(borderRadius300),
-                      side: const BorderSide(color: Colors.white38),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 4. Bottom section — instructions & manual entry
+          FadeTransition(
+            opacity: _overlayFade,
+            child: Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: Container(
+                    color: Colors.black.withOpacity(0.4),
+                    padding: EdgeInsets.only(
+                      top: spacing6,
+                      bottom: bottomPadding + spacing6,
+                      left: spacing6,
+                      right: spacing6,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "Align the QR code within the frame",
+                          style: sMedium.copyWith(
+                            color: Colors.white.withOpacity(0.7),
+                          ),
+                        ),
+                        const SizedBox(height: spacing5),
+                        GestureDetector(
+                          onTap: _showManualEntryDialog,
+                          child: Container(
+                            width: double.infinity,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              color: Colors.white.withOpacity(0.1),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.15),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.keyboard_alt_outlined,
+                                  color: Colors.white.withOpacity(0.6),
+                                  size: 18,
+                                ),
+                                const SizedBox(width: spacing3),
+                                Text(
+                                  "Enter Code Manually",
+                                  style: smBold.copyWith(
+                                    color: Colors.white.withOpacity(0.7),
+                                    letterSpacing: -0.1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -246,9 +478,6 @@ class QrScannerOverlayShape extends ShapeBorder {
 
   @override
   void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
-    final width = rect.width;
-    final height = rect.height;
-
     final backgroundPaint = Paint()
       ..color = Colors.black.withOpacity(0.65)
       ..style = PaintingStyle.fill;
@@ -264,9 +493,11 @@ class QrScannerOverlayShape extends ShapeBorder {
       Path.combine(
         PathOperation.difference,
         Path()..addRect(rect),
-        Path()..addRRect(
-          RRect.fromRectAndRadius(cutoutRect, Radius.circular(borderRadius)),
-        ),
+        Path()
+          ..addRRect(
+            RRect.fromRectAndRadius(
+                cutoutRect, Radius.circular(borderRadius)),
+          ),
       ),
       backgroundPaint,
     );
@@ -279,14 +510,13 @@ class QrScannerOverlayShape extends ShapeBorder {
       ..strokeCap = StrokeCap.round;
 
     final path = Path();
-    final halfWidth = cutOutSize / 2;
-    final halfHeight = cutOutSize / 2;
+    final halfSize = cutOutSize / 2;
     final center = rect.center;
 
-    final left = center.dx - halfWidth;
-    final right = center.dx + halfWidth;
-    final top = center.dy - halfHeight;
-    final bottom = center.dy + halfHeight;
+    final left = center.dx - halfSize;
+    final right = center.dx + halfSize;
+    final top = center.dy - halfSize;
+    final bottom = center.dy + halfSize;
 
     // Top Left Corner
     path.moveTo(left + borderRadius, top);
