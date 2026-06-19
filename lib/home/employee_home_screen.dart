@@ -14,6 +14,7 @@ import 'package:maucoffee/repository/order_repository.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
+import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 
 class EmployeeHomeScreen extends StatefulWidget {
   const EmployeeHomeScreen({super.key});
@@ -66,12 +67,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     } catch (e) {
       debugPrint("Gagal memuat data POS: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Gagal memuat data: $e"),
-            backgroundColor: errorColor,
-          ),
-        );
+        CustomFeedback.showError(context, "Gagal memuat data: $e");
       }
     } finally {
       if (mounted) {
@@ -95,23 +91,13 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
 
   void _addToCart(ProductModel product) {
     if (product.stock <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Stok produk kosong!"),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      CustomFeedback.showWarning(context, "Stok produk kosong!");
       return;
     }
 
     final currentQty = _cart[product.id] ?? 0;
     if (currentQty >= product.stock) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Jumlah melebihi stok yang tersedia!"),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      CustomFeedback.showWarning(context, "Jumlah melebihi stok yang tersedia!");
       return;
     }
 
@@ -442,25 +428,11 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                 _loadInitialData();
 
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Data transaksi berhasil disimpan ke Supabase!",
-                      ),
-                      backgroundColor: successColor,
-                    ),
-                  );
+                  CustomFeedback.showSuccess(context, "Data transaksi berhasil disimpan ke Supabase!");
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        "Gagal menyimpan transaksi ke database: $e",
-                      ),
-                      backgroundColor: errorColor,
-                    ),
-                  );
+                  CustomFeedback.showError(context, "Gagal menyimpan transaksi ke database: $e");
                 }
               }
             },

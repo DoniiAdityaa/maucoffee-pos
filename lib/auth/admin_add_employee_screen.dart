@@ -7,6 +7,7 @@ import 'package:maucoffee/model/employee_model.dart';
 import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
+import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 
 class AdminAddEmployeeScreen extends StatefulWidget {
   final String deviceUuid;
@@ -91,39 +92,12 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
       await employeeRepo.addEmployee(newEmployee);
 
       if (mounted) {
-        HapticFeedback.heavyImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "${_nameController.text} has been registered!",
-              style: sMedium.copyWith(color: Colors.white),
-            ),
-            backgroundColor: const Color(0xFF2D8A4E),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.all(spacing6),
-          ),
-        );
+        CustomFeedback.showSuccess(context, "${_nameController.text} has been registered!");
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Failed to register: $e",
-              style: sMedium.copyWith(color: Colors.white),
-            ),
-            backgroundColor: const Color(0xFFE04040),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.all(spacing6),
-          ),
-        );
+        CustomFeedback.showError(context, "Failed to register: $e");
       }
     } finally {
       if (mounted) {

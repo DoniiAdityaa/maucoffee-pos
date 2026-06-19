@@ -13,6 +13,7 @@ import 'package:maucoffee/home/admin_home_screen.dart';
 import 'package:maucoffee/navigation/navigation.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
+import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -97,21 +98,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
 
   Future<void> _handleGoogleSignIn() async {
     if (!_isTermsAccepted) {
-      HapticFeedback.heavyImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Please accept Terms of Service first",
-            style: sMedium.copyWith(color: Colors.white),
-          ),
-          backgroundColor: const Color(0xFFE04040),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(spacing6),
-        ),
-      );
+      CustomFeedback.showError(context, "Please accept Terms of Service first");
       return;
     }
 
@@ -159,20 +146,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Sign-in failed: $e",
-              style: sMedium.copyWith(color: Colors.white),
-            ),
-            backgroundColor: const Color(0xFFE04040),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.all(spacing6),
-          ),
-        );
+        CustomFeedback.showError(context, "Sign-in failed: $e");
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

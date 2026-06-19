@@ -11,6 +11,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 // Import Design System kita
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
+import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 
 class EmployeeRegisterQrScreen extends StatefulWidget {
   const EmployeeRegisterQrScreen({super.key});
@@ -126,21 +127,9 @@ class _EmployeeRegisterQrScreenState extends State<EmployeeRegisterQrScreen>
           await prefs.setLoginRole('employee');
 
           if (mounted) {
-            HapticFeedback.heavyImpact();
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  "Welcome, ${employee.name}! Registered as ${employee.role}.",
-                  style: sMedium.copyWith(color: Colors.white),
-                ),
-                backgroundColor: const Color(0xFF2D8A4E),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                margin: const EdgeInsets.all(spacing6),
-              ),
+            CustomFeedback.showSuccess(
+              context,
+              "Welcome, ${employee.name}! Registered as ${employee.role}.",
             );
 
             Navigator.pushAndRemoveUntil(
@@ -381,23 +370,7 @@ class _EmployeeRegisterQrScreenState extends State<EmployeeRegisterQrScreen>
                               onTap: () {
                                 Clipboard.setData(
                                     ClipboardData(text: _deviceUuid));
-                                HapticFeedback.mediumImpact();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      "Code copied to clipboard",
-                                      style: sMedium.copyWith(
-                                          color: Colors.white),
-                                    ),
-                                    backgroundColor: const Color(0xFF2D8A4E),
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    margin: const EdgeInsets.all(spacing6),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
+                                CustomFeedback.showSuccess(context, "Code copied to clipboard");
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
