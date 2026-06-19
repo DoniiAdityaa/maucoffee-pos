@@ -242,7 +242,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
         vertical: spacing4,
       ),
       child: Text(
-        "Transaksi Penjualan",
+        "Order Item",
         style: lgBold.copyWith(color: Colors.white),
       ),
     );
