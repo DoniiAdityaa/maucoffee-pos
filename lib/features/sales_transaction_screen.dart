@@ -9,6 +9,7 @@ import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 import 'package:maucoffee/ui/widget_sharing/cash_payment_widget.dart';
 import 'package:maucoffee/ui/widget_sharing/success_dialog.dart';
 import 'package:maucoffee/ui/widget_sharing/qris_payment_widget.dart';
+import 'package:maucoffee/data/history_manager.dart';
 
 class ProductDummy {
   final String id;
@@ -528,6 +529,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
   }
 
   void _openCheckoutBottomSheet() {
+    final nameController = TextEditingController();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -628,7 +630,32 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: spacing5),
+                      // Input Nama Pembeli
+                      Text(
+                        "Nama Pembeli (Opsional)",
+                        style: xsBold.copyWith(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        ),
+                        child: TextField(
+                          controller: nameController,
+                          style: sMedium.copyWith(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: "Contoh: Budi",
+                            hintStyle: sMedium.copyWith(color: Colors.white30),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: spacing4),
 
                       // Payment Methods Title
                       Text(
@@ -747,6 +774,10 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                         onPressed: () {
                           Navigator.pop(context); // Close checkout bottom sheet
 
+                          final customerName = nameController.text.trim().isEmpty
+                              ? "Pelanggan Umum"
+                              : nameController.text.trim();
+
                           if (selectedPayment == "Cash") {
                             // Show cash payment bottom sheet
                             showModalBottomSheet(
@@ -760,6 +791,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                                     "Cash",
                                     paidAmount: paid,
                                     change: change,
+                                    customerName: customerName,
                                   );
                                 },
                               ),
@@ -773,7 +805,11 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                               builder: (context) => QrisPaymentBottomSheet(
                                 totalPrice: _getCartTotal(),
                                 onConfirm: (imagePath) {
-                                  _processCheckout("QRIS");
+                                  _processCheckout(
+                                    "QRIS",
+                                    customerName: customerName,
+                                    qrisProofPath: imagePath,
+                                  );
                                 },
                               ),
                             );
@@ -805,9 +841,42 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
     );
   }
 
-  void _processCheckout(String method, {double paidAmount = 0.0, double change = 0.0}) {
+  void _processCheckout(
+    String method, {
+    double paidAmount = 0.0,
+    double change = 0.0,
+    String customerName = "Pelanggan Umum",
+    String? qrisProofPath,
+  }) {
     final String trxNum =
         "TRX-${10000 + (DateTime.now().millisecond * 7) % 90000}";
+
+    // Simpan data transaksi ke HistoryManager sebelum keranjang di-clear
+    final List<TransactionItem> txItems = [];
+    _cart.forEach((id, qty) {
+      final product = _products.firstWhere((p) => p.id == id);
+      txItems.add(
+        TransactionItem(
+          name: product.name,
+          qty: qty,
+          price: product.price,
+        ),
+      );
+    });
+
+    HistoryManager().addTransaction(
+      TransactionHistory(
+        id: trxNum,
+        customerName: customerName,
+        dateTime: DateTime.now(),
+        totalAmount: _getCartTotal(),
+        paymentMethod: method,
+        items: txItems,
+        paidAmount: paidAmount,
+        changeAmount: change,
+        qrisProofPath: qrisProofPath,
+      ),
+    );
 
     showDialog(
       context: context,

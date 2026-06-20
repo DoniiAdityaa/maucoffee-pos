@@ -6,6 +6,7 @@ import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
+import 'package:maucoffee/data/history_manager.dart';
 
 // Model untuk Bahan Baku
 class IngredientItem {
@@ -370,11 +371,12 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                         return;
                       }
 
+                      final newId = DateTime.now().millisecondsSinceEpoch
+                          .toString();
                       setState(() {
                         _ingredients.add(
                           IngredientItem(
-                            id: DateTime.now().millisecondsSinceEpoch
-                                .toString(),
+                            id: newId,
                             name: name.toLowerCase(),
                             category: selectedCategory,
                             stock: stock,
@@ -383,6 +385,20 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                           ),
                         );
                       });
+
+                      // Catat ke HistoryManager
+                      HistoryManager().addStockLog(
+                        StockHistory(
+                          id: "LOG-$newId",
+                          ingredientName: name.toLowerCase(),
+                          category: selectedCategory,
+                          adjustedAmount: stock,
+                          stockBefore: 0,
+                          stockAfter: stock,
+                          type: "Baru",
+                          dateTime: DateTime.now(),
+                        ),
+                      );
 
                       Navigator.pop(context);
                       CustomFeedback.showSuccess(
@@ -559,16 +575,28 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                       return;
                     }
 
+                    final stockBefore = item.stock;
+                    final stockAfter = isAdd
+                        ? stockBefore + adjustVal
+                        : (stockBefore - adjustVal).clamp(0.0, double.infinity);
+
                     setState(() {
-                      if (isAdd) {
-                        item.stock += adjustVal;
-                      } else {
-                        item.stock = (item.stock - adjustVal).clamp(
-                          0,
-                          double.infinity,
-                        );
-                      }
+                      item.stock = stockAfter;
                     });
+
+                    // Catat ke HistoryManager
+                    HistoryManager().addStockLog(
+                      StockHistory(
+                        id: "LOG-${DateTime.now().millisecondsSinceEpoch}",
+                        ingredientName: item.name,
+                        category: item.category,
+                        adjustedAmount: adjustVal,
+                        stockBefore: stockBefore,
+                        stockAfter: stockAfter,
+                        type: isAdd ? "Tambah" : "Kurang",
+                        dateTime: DateTime.now(),
+                      ),
+                    );
 
                     Navigator.pop(context);
                     HapticFeedback.mediumImpact();
@@ -597,34 +625,6 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     );
   }
 
-  Widget _customTextField(
-    TextEditingController controller,
-    String hint, {
-    bool isNumber = false,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: spacing3),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-        inputFormatters: isNumber
-            ? [FilteringTextInputFormatter.digitsOnly]
-            : null,
-        style: sMedium.copyWith(color: Colors.white),
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          hintText: hint,
-          hintStyle: const TextStyle(color: Colors.white24),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -648,6 +648,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                     "Katalog & Inventory",
                     style: lgBold.copyWith(color: Colors.white),
                   ),
+
                   // Action Button
                   GestureDetector(
                     onTap: () {
@@ -680,31 +681,30 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                 ],
               ),
             ),
+            const SizedBox(height: 10),
 
-            // Tab Bar Glassmorphic Container
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: spacing6,
-                vertical: spacing2,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: spacing6),
               child: Container(
-                padding: const EdgeInsets.all(4),
+                height: 48,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.03),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: TabBar(
                   controller: _tabController,
                   indicator: BoxDecoration(
-                    color: primaryColor,
-                    borderRadius: BorderRadius.circular(8),
+                    color: primaryColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: primaryColor, width: 1),
                   ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerColor: Colors.transparent,
-                  labelStyle: sBold,
-                  labelColor: Colors.white,
+                  labelColor: primaryColor,
                   unselectedLabelColor: Colors.white60,
+                  labelStyle: sBold,
+                  unselectedLabelStyle: sMedium,
+                  dividerColor: Colors.transparent,
+                  indicatorSize: TabBarIndicatorSize.tab,
                   tabs: const [
                     Tab(text: "Menu Penjualan"),
                     Tab(text: "Bahan Baku (Inventory)"),
@@ -712,7 +712,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                 ),
               ),
             ),
-            const SizedBox(height: spacing2),
+            const SizedBox(height: spacing3),
 
             // Tab Views
             Expanded(
@@ -1086,6 +1086,34 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _customTextField(
+    TextEditingController controller,
+    String hint, {
+    bool isNumber = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: spacing3),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        inputFormatters: isNumber
+            ? [FilteringTextInputFormatter.digitsOnly]
+            : null,
+        style: sMedium.copyWith(color: Colors.white),
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white24),
+        ),
+      ),
     );
   }
 

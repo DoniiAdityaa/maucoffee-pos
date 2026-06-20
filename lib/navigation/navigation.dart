@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:maucoffee/home/admin_home_screen.dart';
 import 'package:maucoffee/features/sales_transaction_screen.dart';
 import 'package:maucoffee/features/catalog_inventory_screen.dart';
+import 'package:maucoffee/features/history_screen.dart';
+import 'package:maucoffee/features/attendance_screen.dart';
+import 'package:maucoffee/features/finance_screen.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -26,10 +29,10 @@ class _MainNavigationState extends State<MainNavigation> {
     _pages = [
       const AdminHomeScreen(),
       const SalesTransactionScreen(),
-      _placeholder("Shift Kerja"),
-      _placeholder("Absensi"),
+      const HistoryScreen(),
+      const AttendanceScreen(),
       _placeholder("Manajemen"),
-      _placeholder("Keuangan"),
+      const FinanceScreen(),
       const CatalogInventoryScreen(),
       _placeholder("Pengaturan"),
     ];
@@ -199,14 +202,18 @@ class _MainNavigationState extends State<MainNavigation> {
                   _menuItem(0, Icons.home_rounded, "Beranda"),
                   _menuItem(1, Icons.coffee_rounded, "Item"),
                   _menuItem(6, Icons.inventory_2_outlined, "Katalog"),
-                  _menuItem(2, Icons.hourglass_bottom_rounded, "Shift Kerja"),
+                  _menuItem(2, Icons.history_rounded, "Histori"),
                 ],
               ),
               Row(
                 children: [
                   _menuItem(3, Icons.fingerprint_rounded, "Absensi"),
                   _menuItem(4, Icons.people_outline_rounded, "Manajemen"),
-                  _menuItem(5, Icons.account_balance_wallet_rounded, "Keuangan"),
+                  _menuItem(
+                    5,
+                    Icons.account_balance_wallet_rounded,
+                    "Keuangan",
+                  ),
                   _menuItem(7, Icons.settings_rounded, "Pengaturan"),
                 ],
               ),
