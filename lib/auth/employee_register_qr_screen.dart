@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
-import 'package:maucoffee/home/employee_home_screen.dart';
+import 'package:maucoffee/navigation/navigation.dart';
 import 'package:maucoffee/repository/employee_repository.dart';
+import 'package:maucoffee/model/employee_model.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 // Import Design System kita
@@ -105,7 +106,27 @@ class _EmployeeRegisterQrScreenState extends State<EmployeeRegisterQrScreen>
     );
 
     _entryController.forward();
+    _registerDeviceIfNeeded();
     _startPolling();
+  }
+
+  Future<void> _registerDeviceIfNeeded() async {
+    try {
+      final employeeRepo = serviceLocator<EmployeeRepository>();
+      final existing = await employeeRepo.getEmployeeById(_deviceUuid);
+      if (existing == null) {
+        final newEmployee = EmployeeModel(
+          id: _deviceUuid,
+          name: "Karyawan Baru",
+          role: "Cashier",
+          isActive: false,
+        );
+        await employeeRepo.addEmployee(newEmployee);
+        debugPrint("Device registered successfully with isActive = false");
+      }
+    } catch (e) {
+      debugPrint("Error registering device to Supabase: $e");
+    }
   }
 
   void _startPolling() {
@@ -136,7 +157,7 @@ class _EmployeeRegisterQrScreenState extends State<EmployeeRegisterQrScreen>
               context,
               PageRouteBuilder(
                 pageBuilder: (context, animation, secondaryAnimation) =>
-                    const EmployeeHomeScreen(),
+                    const MainNavigation(initialIndex: 0),
                 transitionDuration: const Duration(milliseconds: 400),
                 transitionsBuilder:
                     (context, animation, secondaryAnimation, child) {

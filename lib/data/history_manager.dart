@@ -237,6 +237,10 @@ class HistoryManager {
     _attendanceLogs.insert(0, attendance);
   }
 
+  void deleteAttendance(String id) {
+    _attendanceLogs.removeWhere((log) => log.id == id);
+  }
+
   void addExpense(ExpenseModel expense) {
     _expenses.insert(0, expense);
   }

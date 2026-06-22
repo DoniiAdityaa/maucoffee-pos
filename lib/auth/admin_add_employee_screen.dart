@@ -35,6 +35,8 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
   late Animation<double> _contentFade;
   late Animation<Offset> _contentSlide;
 
+  bool _isEditing = false;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +56,30 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
       curve: Curves.easeOutCubic,
     ));
     _entryController.forward();
+    _loadEmployeeData();
+  }
+
+  Future<void> _loadEmployeeData() async {
+    try {
+      final employeeRepo = serviceLocator<EmployeeRepository>();
+      final existing = await employeeRepo.getEmployeeById(widget.deviceUuid);
+      if (existing != null) {
+        // Jika sudah aktif dan namanya bukan nama default, isi form dan set ke mode edit
+        if (existing.isActive && 
+            existing.name != "Karyawan Baru" && 
+            existing.name != "Menunggu Pendaftaran") {
+          setState(() {
+            _nameController.text = existing.name;
+            _phoneController.text = existing.phone ?? '';
+            _emailController.text = existing.email ?? '';
+            _selectedRole = existing.role;
+            _isEditing = true;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Gagal memuat data karyawan: $e");
+    }
   }
 
   @override
@@ -89,15 +115,30 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
       );
 
       final employeeRepo = serviceLocator<EmployeeRepository>();
-      await employeeRepo.addEmployee(newEmployee);
+      final existing = await employeeRepo.getEmployeeById(widget.deviceUuid);
+      if (existing != null) {
+        await employeeRepo.updateEmployee(newEmployee);
+      } else {
+        await employeeRepo.addEmployee(newEmployee);
+      }
 
       if (mounted) {
-        CustomFeedback.showSuccess(context, "${_nameController.text} has been registered!");
+        CustomFeedback.showSuccess(
+          context, 
+          _isEditing 
+              ? "Profil ${_nameController.text} berhasil diperbarui!" 
+              : "${_nameController.text} berhasil didaftarkan!"
+        );
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
-        CustomFeedback.showError(context, "Failed to register: $e");
+        CustomFeedback.showError(
+          context, 
+          _isEditing 
+              ? "Gagal memperbarui profil: $e" 
+              : "Gagal mendaftarkan karyawan: $e"
+        );
       }
     } finally {
       if (mounted) {
@@ -219,7 +260,7 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
                     ),
                     const SizedBox(width: spacing4),
                     Text(
-                      "Register Staff",
+                      _isEditing ? "Edit Profil Staf" : "Daftar Staf",
                       style: mdBold.copyWith(
                         color: Colors.white,
                         letterSpacing: -0.3,
@@ -294,7 +335,7 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              "Device ID",
+                                              "ID Perangkat",
                                               style: xxsBold.copyWith(
                                                 color: const Color(0xFFE9A44C),
                                                 letterSpacing: 0.5,
@@ -325,12 +366,12 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
                             // ── Name Field ──
                             _buildField(
                               controller: _nameController,
-                              label: "EMPLOYEE NAME",
-                              hint: "Enter full name",
+                              label: "NAMA KARYAWAN",
+                              hint: "Masukkan nama lengkap",
                               icon: Icons.person_outline_rounded,
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
-                                  return "Name is required";
+                                  return "Nama wajib diisi";
                                 }
                                 return null;
                               },
@@ -343,7 +384,7 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  "ROLE",
+                                  "PERAN / HAK AKSES",
                                   style: xsBold.copyWith(
                                     color: Colors.white.withOpacity(0.5),
                                     letterSpacing: 0.5,
@@ -438,8 +479,8 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
                             // ── Phone Field (Optional) ──
                             _buildField(
                               controller: _phoneController,
-                              label: "PHONE NUMBER (OPTIONAL)",
-                              hint: "e.g. 081234567890",
+                              label: "NOMOR TELEPON (OPSIONAL)",
+                              hint: "misal: 081234567890",
                               icon: Icons.phone_android_rounded,
                               keyboardType: TextInputType.phone,
                             ),
@@ -449,8 +490,8 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
                             // ── Email Field (Optional) ──
                             _buildField(
                               controller: _emailController,
-                              label: "EMAIL (OPTIONAL)",
-                              hint: "e.g. staff@maucoffee.com",
+                              label: "EMAIL (OPSIONAL)",
+                              hint: "misal: staff@maucoffee.com",
                               icon: Icons.email_outlined,
                               keyboardType: TextInputType.emailAddress,
                             ),
@@ -497,14 +538,14 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen>
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
-                                          const Icon(
-                                            Icons.person_add_rounded,
+                                          Icon(
+                                            _isEditing ? Icons.save_rounded : Icons.person_add_rounded,
                                             color: Colors.white,
                                             size: 20,
                                           ),
                                           const SizedBox(width: spacing3),
                                           Text(
-                                            "Register Employee",
+                                            _isEditing ? "Simpan Perubahan" : "Daftarkan Karyawan",
                                             style: smBold.copyWith(
                                               color: Colors.white,
                                               letterSpacing: -0.1,

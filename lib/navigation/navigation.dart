@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maucoffee/home/admin_home_screen.dart';
@@ -7,12 +8,16 @@ import 'package:maucoffee/features/catalog_inventory_screen.dart';
 import 'package:maucoffee/features/history_screen.dart';
 import 'package:maucoffee/features/attendance_screen.dart';
 import 'package:maucoffee/features/finance_screen.dart';
+import 'package:maucoffee/features/settings_screen.dart';
+import 'package:maucoffee/data/history_manager.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
+import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
+  final int initialIndex;
+  const MainNavigation({super.key, this.initialIndex = 1});
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -23,9 +28,21 @@ class _MainNavigationState extends State<MainNavigation> {
   bool _isMenuOpen = false;
   late final List<Widget> _pages;
 
+  // Active Shift State
+  Timer? _navigationTimer;
+  DateTime? _activeShiftStartTime;
+  String _activeShiftFormattedDuration = "00:00:00";
+
+  // Draggable Pill Position
+  double? _pillX;
+  double? _pillY;
+  bool _hasInitializedPillPosition = false;
+  Duration _animationDuration = Duration.zero;
+
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     _pages = [
       const AdminHomeScreen(),
       const SalesTransactionScreen(),
@@ -34,18 +51,71 @@ class _MainNavigationState extends State<MainNavigation> {
       _placeholder("Manajemen"),
       const FinanceScreen(),
       const CatalogInventoryScreen(),
-      _placeholder("Pengaturan"),
+      const SettingsScreen(),
     ];
+    _startNavigationTimer();
   }
+
+  @override
+  void dispose() {
+    _navigationTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startNavigationTimer() {
+    _navigationTimer?.cancel();
+    _navigationTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      final activeShift = await HistoryManager().getActiveShift();
+      if (activeShift != null) {
+        final startTime = activeShift["startTime"] as DateTime;
+        final duration = DateTime.now().difference(startTime);
+
+        if (mounted) {
+          setState(() {
+            _activeShiftStartTime = startTime;
+            _activeShiftFormattedDuration = _formatDuration(duration);
+          });
+        }
+      } else {
+        if (_activeShiftStartTime != null) {
+          if (mounted) {
+            setState(() {
+              _activeShiftStartTime = null;
+              _activeShiftFormattedDuration = "00:00:00";
+              _hasInitializedPillPosition = false; // Reset position on shift stop
+            });
+          }
+        }
+      }
+    });
+  }
+
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
+  }
+
 
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final size = MediaQuery.of(context).size;
+
+    // Initialize pill position to bottom right on first active frame
+    if (_activeShiftStartTime != null && !_hasInitializedPillPosition) {
+      _pillX = size.width - 135 - spacing4;
+      _pillY = size.height - (bottomPadding > 0 ? bottomPadding : spacing5) - 56;
+      _hasInitializedPillPosition = true;
+    }
 
     return Scaffold(
       extendBody: true, // Let content flow behind floating glass bar
       body: Stack(
         children: [
+
           // Background Gradient matching other screens
           Container(
             decoration: const BoxDecoration(
@@ -116,9 +186,21 @@ class _MainNavigationState extends State<MainNavigation> {
             bottom: bottomPadding > 0 ? bottomPadding : spacing5,
             child: _toggleButton(),
           ),
+
+          // Persistent Floating Shift Pill (Draggable & Snapping)
+          if (_activeShiftStartTime != null && !_isMenuOpen)
+            AnimatedPositioned(
+              duration: _animationDuration,
+              curve: Curves.easeOutBack, // Bouncy curve for premium feel
+              left: _pillX,
+              top: _pillY,
+              child: _buildActiveShiftPill(),
+            ),
         ],
       ),
     );
+
+
   }
 
   // ── Private Navigation Widgets ──
@@ -225,10 +307,19 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   Widget _menuItem(int index, IconData icon, String label) {
+    final bool isLocked = index == 4; // Manajemen is locked
     final bool isActive = _currentIndex == index;
     return Expanded(
       child: GestureDetector(
         onTap: () {
+          if (isLocked) {
+            HapticFeedback.heavyImpact();
+            CustomFeedback.showInfo(
+              context,
+              "Fitur Manajemen Toko terkunci (Sedang dalam pengembangan).",
+            );
+            return;
+          }
           if (_currentIndex != index) {
             HapticFeedback.lightImpact();
             setState(() {
@@ -247,38 +338,69 @@ class _MainNavigationState extends State<MainNavigation> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: isActive
-                ? const Color(0xFFE27D00).withOpacity(0.15)
+                ? const Color(0xFFE27D00).withValues(alpha: 0.15)
                 : Colors.transparent,
             border: Border.all(
               color: isActive
-                  ? const Color(0xFFE27D00).withOpacity(0.3)
+                  ? const Color(0xFFE27D00).withValues(alpha: 0.3)
                   : Colors.transparent,
               width: 1.2,
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
             children: [
-              Icon(
-                icon,
-                color: isActive
-                    ? const Color(0xFFE27D00)
-                    : Colors.white.withOpacity(0.45),
-                size: 24,
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    color: isLocked
+                        ? Colors.white.withValues(alpha: 0.25)
+                        : (isActive
+                            ? const Color(0xFFE27D00)
+                            : Colors.white.withValues(alpha: 0.45)),
+                    size: 24,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: xxsBold.copyWith(
+                      color: isLocked
+                          ? Colors.white.withValues(alpha: 0.35)
+                          : (isActive
+                              ? const Color(0xFFE27D00)
+                              : Colors.white.withValues(alpha: 0.65)),
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: xxsBold.copyWith(
-                  color: isActive
-                      ? const Color(0xFFE27D00)
-                      : Colors.white.withOpacity(0.65),
+              if (isLocked)
+                Positioned(
+                  top: -4,
+                  right: 4,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE27D00),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF2A1A0A),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.lock_rounded,
+                      color: Colors.white,
+                      size: 10,
+                    ),
+                  ),
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
             ],
           ),
         ),
@@ -289,6 +411,162 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget _placeholder(String title) {
     return Center(
       child: Text(title, style: lgBold.copyWith(color: Colors.white)),
+    );
+  }
+
+  Widget _buildActiveShiftPill() {
+    return GestureDetector(
+      onPanStart: (_) {
+        setState(() {
+          _animationDuration = Duration.zero; // Drag response is immediate
+        });
+      },
+      onPanUpdate: (details) {
+        setState(() {
+          _pillX = (_pillX ?? 0) + details.delta.dx;
+          _pillY = (_pillY ?? 0) + details.delta.dy;
+
+          // Clamping bounds to keep the pill within the screen view
+          final size = MediaQuery.of(context).size;
+          final topPadding = MediaQuery.of(context).padding.top;
+          final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+          _pillX = _pillX!.clamp(spacing4, size.width - 135 - spacing4);
+          _pillY = _pillY!.clamp(topPadding + spacing4, size.height - bottomPadding - 56 - spacing4);
+        });
+      },
+      onPanEnd: (_) {
+        final size = MediaQuery.of(context).size;
+        final topPadding = MediaQuery.of(context).padding.top;
+        final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+        final leftBound = spacing4;
+        final rightBound = size.width - 135 - spacing4;
+        final topBound = topPadding + spacing4;
+        final bottomBound = size.height - bottomPadding - 56 - spacing4;
+
+        // Snap X to nearest horizontal edge (left or right)
+        final midX = size.width / 2;
+        final targetX = (_pillX! + (135 / 2) < midX) ? leftBound : rightBound;
+
+        // Snap Y to nearest vertical edge (top or bottom)
+        final midY = (topPadding + size.height - bottomPadding - 56) / 2;
+        final targetY = (_pillY! + (56 / 2) < midY) ? topBound : bottomBound;
+
+        setState(() {
+          _animationDuration = const Duration(milliseconds: 350);
+          _pillX = targetX;
+          _pillY = targetY;
+        });
+      },
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _currentIndex = 3; // Buka tab Absensi
+        });
+      },
+      child: ClipRRect(
+
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            width: 135, // Fixed width for precise clamping
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF2A1A0A).withValues(alpha: 0.85),
+              border: Border.all(
+                color: const Color(0xFFE27D00).withValues(alpha: 0.3),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _PulseDot(),
+                const SizedBox(width: 8),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Shift Kerja",
+                      style: xxxsBold.copyWith(color: Colors.white38),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _activeShiftFormattedDuration,
+                      style: xsBold.copyWith(
+                        color: const Color(0xFFE27D00),
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+}
+
+class _PulseDot extends StatefulWidget {
+  const _PulseDot();
+
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.3, end: 1.0).animate(_controller),
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          color: Color(0xFF00C853),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Color(0xFF00C853),
+              blurRadius: 4,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

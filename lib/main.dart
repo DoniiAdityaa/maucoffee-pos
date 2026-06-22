@@ -5,7 +5,6 @@ import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/auth/role_selector_screen.dart';
 import 'package:maucoffee/navigation/navigation.dart';
-import 'package:maucoffee/home/employee_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +15,7 @@ void main() async {
   // Inisialisasi service locator (GetIt)
   await setUpLocator();
 
-  // Membaca status login saat ini untuk merutekan ke screen yang sesuai secara instan
+  // Membaca status login saat ini untuk merutecan ke screen yang sesuai secara instan
   final prefs = serviceLocator<UserPreference>();
   final String? role = prefs.getLoginRole();
   final bool hasAdminToken = prefs.getToken() != null;
@@ -26,7 +25,7 @@ void main() async {
   if (role == 'admin' && hasAdminToken) {
     initialScreen = const MainNavigation();
   } else if (role == 'employee' && hasEmployeeData) {
-    initialScreen = const EmployeeHomeScreen();
+    initialScreen = const MainNavigation();
   } else {
     initialScreen = const RoleSelectorScreen();
   }

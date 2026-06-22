@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:maucoffee/model/user_model.dart';
 import 'package:maucoffee/model/employee_model.dart'; // Import EmployeeModel
@@ -45,10 +46,15 @@ class UserPreference {
   // Generate & Simpan ID Perangkat Unik (Untuk QR Handshake Karyawan Baru)
   String getDeviceUuid() {
     var uuid = prefs.getString("device_uuid");
-    if (uuid == null) {
-      // Membuat format ID unik sederhana dari timestamp + angka acak
-      final random = DateTime.now().microsecondsSinceEpoch.toString();
-      uuid = "emp-$random";
+    // Otomatis regenerasi ke format baru jika belum ada atau masih format lama (emp- angka)
+    if (uuid == null || uuid.startsWith("emp-")) {
+      final chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      final rand = Random();
+      final code = List.generate(
+        6,
+        (index) => chars[rand.nextInt(chars.length)],
+      ).join();
+      uuid = "EMP-$code";
       prefs.setString("device_uuid", uuid);
     }
     return uuid;

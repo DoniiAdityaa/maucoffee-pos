@@ -19,6 +19,11 @@ class AdminHomeScreen extends StatefulWidget {
 }
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
+  // Welcome Messages
+  String _welcomeMessage = "Halo, Owner! 👋";
+  String _welcomeSubtitle = "Kelola tokomu dan tim dari sini";
+  bool _isAdmin = true;
+
   // Store status state
   bool _isStoreOpen = false;
   DateTime? _storeOpenTime;
@@ -73,14 +78,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   // Low Stock Items Mock
   final List<Map<String, dynamic>> _lowStockItems = [
-    {
-      'name': 'Fresh Milk UHT',
-      'stock': '3 Pcs left',
-    },
-    {
-      'name': 'Arabica Coffee Beans',
-      'stock': '1.5 kg left',
-    },
+    {'name': 'Fresh Milk UHT', 'stock': '3 Pcs left'},
+    {'name': 'Arabica Coffee Beans', 'stock': '1.5 kg left'},
   ];
 
   // Recent Transactions Preview Mock
@@ -107,12 +106,46 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   // Weekly sales chart data points (Mocked Indonesian Rupiah values in thousands)
   final List<double> _weeklySalesData = [450, 620, 580, 890, 720, 1100, 950];
-  final List<String> _weeklySalesDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final List<String> _weeklySalesDays = [
+    'Sen',
+    'Sel',
+    'Rab',
+    'Kam',
+    'Jum',
+    'Sab',
+    'Min',
+  ];
 
   @override
   void initState() {
     super.initState();
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+    _loadUserSession();
+  }
+
+  void _loadUserSession() {
+    final userPrefs = serviceLocator<UserPreference>();
+    final role = userPrefs.getLoginRole(); // 'admin' atau 'employee'
+
+    setState(() {
+      _isAdmin = (role == 'admin');
+    });
+
+    if (role == 'admin') {
+      final user = userPrefs.getUser();
+      final name = user.name ?? user.username ?? "Owner";
+      setState(() {
+        _welcomeMessage = "Halo, $name! 👋";
+        _welcomeSubtitle = "Kelola tokomu dan tim dari sini";
+      });
+    } else {
+      final emp = userPrefs.getEmployee();
+      final name = emp?.name ?? "Staf";
+      setState(() {
+        _welcomeMessage = "Halo, $name! 👋";
+        _welcomeSubtitle = "Pantau shift kerja dan aktivitasmu di sini";
+      });
+    }
   }
 
   @override
@@ -151,7 +184,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     setState(() {
       _activeStaffShift.removeWhere((staff) => staff['id'] == id);
     });
-    CustomFeedback.showSuccess(context, "Deleted $name's shift record.");
+    CustomFeedback.showSuccess(context, "Catatan shift $name berhasil dihapus.");
   }
 
   // Helper duration formatter (HH:MM:SS)
@@ -177,7 +210,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: Container(
             padding: const EdgeInsets.all(spacing7),
             decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
               color: const Color(0xFF2A1A0A).withValues(alpha: 0.95),
               border: Border(
                 top: BorderSide(
@@ -198,7 +233,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 ),
                 const SizedBox(height: spacing4),
                 Text(
-                  "Sign Out?",
+                  "Keluar?",
                   style: lgBold.copyWith(
                     color: Colors.white,
                     letterSpacing: -0.3,
@@ -206,7 +241,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 ),
                 const SizedBox(height: spacing2),
                 Text(
-                  "You'll need to sign in again to access\nyour dashboard",
+                  "Anda harus masuk kembali untuk mengakses\ndashboard Anda",
                   style: xsRegular.copyWith(
                     color: Colors.white.withValues(alpha: 0.4),
                     height: 1.5,
@@ -230,7 +265,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           ),
                           alignment: Alignment.center,
                           child: Text(
-                            "Cancel",
+                            "Batal",
                             style: smBold.copyWith(
                               color: Colors.white.withValues(alpha: 0.5),
                             ),
@@ -249,12 +284,24 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           Navigator.pushAndRemoveUntil(
                             context,
                             PageRouteBuilder(
-                              pageBuilder: (context, animation, secondaryAnimation) =>
-                                  const RoleSelectorScreen(),
-                              transitionDuration: const Duration(milliseconds: 400),
-                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                return FadeTransition(opacity: animation, child: child);
-                              },
+                              pageBuilder:
+                                  (context, animation, secondaryAnimation) =>
+                                      const RoleSelectorScreen(),
+                              transitionDuration: const Duration(
+                                milliseconds: 400,
+                              ),
+                              transitionsBuilder:
+                                  (
+                                    context,
+                                    animation,
+                                    secondaryAnimation,
+                                    child,
+                                  ) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    );
+                                  },
                             ),
                             (route) => false,
                           );
@@ -263,14 +310,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           height: 50,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(14),
-                            color: const Color(0xFFFF6B6B).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFFFF6B6B,
+                            ).withValues(alpha: 0.15),
                             border: Border.all(
-                              color: const Color(0xFFFF6B6B).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFFFF6B6B,
+                              ).withValues(alpha: 0.3),
                             ),
                           ),
                           alignment: Alignment.center,
                           child: Text(
-                            "Sign Out",
+                            "Keluar",
                             style: smBold.copyWith(
                               color: const Color(0xFFFF8A8A),
                             ),
@@ -319,8 +370,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         const SizedBox(height: spacing8),
                         _buildWeeklyChartSection(),
                         const SizedBox(height: spacing8),
-                        _buildActiveStaffShiftSection(),
-                        const SizedBox(height: spacing8),
+                        if (_isAdmin) ...[
+                          _buildActiveStaffShiftSection(),
+                          const SizedBox(height: spacing8),
+                        ],
                         _buildBestSellersSection(),
                         const SizedBox(height: spacing8),
                         _buildLowStockSection(),
@@ -347,11 +400,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1C1207),
-              Color(0xFF2A1A0A),
-              Color(0xFF1A1008),
-            ],
+            colors: [Color(0xFF1C1207), Color(0xFF2A1A0A), Color(0xFF1A1008)],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
@@ -375,10 +424,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: const LinearGradient(
-                colors: [
-                  Color(0xFFE27D00),
-                  Color(0xFFD06A00),
-                ],
+                colors: [Color(0xFFE27D00), Color(0xFFD06A00)],
               ),
               boxShadow: [
                 BoxShadow(
@@ -407,7 +453,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   ),
                 ),
                 Text(
-                  "Business Dashboard",
+                  "Dashboard Bisnis",
                   style: xsRegular.copyWith(
                     color: Colors.white.withValues(alpha: 0.4),
                   ),
@@ -425,9 +471,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   pageBuilder: (context, animation, secondaryAnimation) =>
                       const AdminScanEmployeeScreen(),
                   transitionDuration: const Duration(milliseconds: 400),
-                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                    return FadeTransition(opacity: animation, child: child);
-                  },
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
                 ),
               );
             },
@@ -437,9 +484,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.06),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: const Icon(
                 Icons.person_add_alt_1_rounded,
@@ -458,9 +503,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.06),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Icon(
                 Icons.logout_rounded,
@@ -478,9 +521,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "Hello, Owner! 👋",
-          style: TextStyle(
+        Text(
+          _welcomeMessage,
+          style: const TextStyle(
             fontFamily: 'poppins',
             fontSize: 28,
             fontWeight: FontWeight.w700,
@@ -491,10 +534,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         ),
         const SizedBox(height: spacing2),
         Text(
-          "Manage your shop and team from here",
-          style: sRegular.copyWith(
-            color: Colors.white.withValues(alpha: 0.4),
-          ),
+          _welcomeSubtitle,
+          style: sRegular.copyWith(color: Colors.white.withValues(alpha: 0.4)),
         ),
       ],
     );
@@ -503,13 +544,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget _buildStatsAndStoreRow(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          child: _buildTodaySalesCard(),
-        ),
+        Expanded(child: _buildTodaySalesCard()),
         const SizedBox(width: spacing4),
-        Expanded(
-          child: _buildStoreStatusCard(),
-        ),
+        Expanded(child: _buildStoreStatusCard()),
       ],
     );
   }
@@ -545,7 +582,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Today's Sales",
+                    "Penjualan Hari Ini",
                     style: xxsMedium.copyWith(
                       color: Colors.white.withValues(alpha: 0.5),
                       letterSpacing: 0.3,
@@ -618,7 +655,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Store Status",
+                    "Status Toko",
                     style: xxsMedium.copyWith(
                       color: Colors.white.withValues(alpha: 0.5),
                       letterSpacing: 0.3,
@@ -640,9 +677,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isStoreOpen ? _formatDuration(_storeDuration) : "CLOSED",
+                    _isStoreOpen ? _formatDuration(_storeDuration) : "TUTUP",
                     style: lgBold.copyWith(
-                      color: _isStoreOpen ? const Color(0xFF2D8A4E) : Colors.white60,
+                      color: _isStoreOpen
+                          ? const Color(0xFF2D8A4E)
+                          : Colors.white60,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -650,7 +689,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   GestureDetector(
                     onTap: _toggleStoreStatus,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(6),
                         color: _isStoreOpen
@@ -663,9 +705,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         ),
                       ),
                       child: Text(
-                        _isStoreOpen ? "Close Store" : "Open Store",
+                        _isStoreOpen ? "Tutup Toko" : "Buka Toko",
                         style: xxxsBold.copyWith(
-                          color: _isStoreOpen ? const Color(0xFFFF8A8A) : const Color(0xFFFF9E22),
+                          color: _isStoreOpen
+                              ? const Color(0xFFFF8A8A)
+                              : const Color(0xFFFF9E22),
                         ),
                       ),
                     ),
@@ -687,11 +731,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         shape: BoxShape.circle,
         color: Color(0xFF2D8A4E),
         boxShadow: [
-          BoxShadow(
-            color: Color(0xFF2D8A4E),
-            blurRadius: 6,
-            spreadRadius: 1,
-          ),
+          BoxShadow(color: Color(0xFF2D8A4E), blurRadius: 6, spreadRadius: 1),
         ],
       ),
     );
@@ -702,7 +742,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "WEEKLY PERFORMANCE",
+          "PERFORMA MINGGUAN",
           style: xsBold.copyWith(
             color: Colors.white.withValues(alpha: 0.3),
             letterSpacing: 1.2,
@@ -726,32 +766,46 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Wrap header in a Wrap to avoid overflow on small screens
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Weekly Sales Trend",
-                            style: smBold.copyWith(color: Colors.white70),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "Shows performance in thousands (K)",
-                            style: xxsRegular.copyWith(color: Colors.white38),
-                          ),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Tren Penjualan Mingguan",
+                              style: smBold.copyWith(color: Colors.white70),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              "Menampilkan performa dalam ribuan (K)",
+                              style: xxsRegular.copyWith(color: Colors.white38),
+                            ),
+                          ],
+                        ),
                       ),
-                      Text(
-                        "+15.4% vs last week",
-                        style: xxsBold.copyWith(color: const Color(0xFF2D8A4E)),
+                      const SizedBox(width: spacing3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: const Color(0xFF2D8A4E).withValues(alpha: 0.12),
+                        ),
+                        child: Text(
+                          "+15.4%",
+                          style: xxsBold.copyWith(color: const Color(0xFF2D8A4E)),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: spacing6),
+                  const SizedBox(height: spacing5),
                   SizedBox(
-                    height: 120,
+                    height: 100,
                     width: double.infinity,
                     child: CustomPaint(
                       painter: _SalesChartPainter(_weeklySalesData),
@@ -761,8 +815,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: _weeklySalesDays.map((day) {
-                      return SizedBox(
-                        width: 32,
+                      return Flexible(
                         child: Text(
                           day,
                           style: xxsRegular.copyWith(color: Colors.white30),
@@ -785,7 +838,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "ACTIVE STAFF SHIFT",
+          "SHIFT STAF AKTIF",
           style: xsBold.copyWith(
             color: Colors.white.withValues(alpha: 0.3),
             letterSpacing: 1.2,
@@ -797,7 +850,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: spacing4, vertical: spacing3),
+              padding: const EdgeInsets.symmetric(
+                horizontal: spacing4,
+                vertical: spacing3,
+              ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 color: Colors.white.withValues(alpha: 0.05),
@@ -811,7 +867,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       padding: const EdgeInsets.symmetric(vertical: spacing5),
                       child: Center(
                         child: Text(
-                          "No active staff currently clocked in.",
+                          "Tidak ada staf aktif yang terdaftar saat ini.",
                           style: sRegular.copyWith(color: Colors.white38),
                         ),
                       ),
@@ -827,7 +883,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       itemBuilder: (context, index) {
                         final staff = _activeStaffShift[index];
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: spacing3),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: spacing3,
+                          ),
                           child: Row(
                             children: [
                               Container(
@@ -835,9 +893,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                 height: 36,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: staff['avatarColor'].withValues(alpha: 0.15),
+                                  color: staff['avatarColor'].withValues(
+                                    alpha: 0.15,
+                                  ),
                                   border: Border.all(
-                                    color: staff['avatarColor'].withValues(alpha: 0.4),
+                                    color: staff['avatarColor'].withValues(
+                                      alpha: 0.4,
+                                    ),
                                     width: 1,
                                   ),
                                 ),
@@ -854,12 +916,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                   children: [
                                     Text(
                                       staff['name'],
-                                      style: smBold.copyWith(color: Colors.white70),
+                                      style: smBold.copyWith(
+                                        color: Colors.white70,
+                                      ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      "${staff['role']} • Clocked-in ${staff['clockIn']}",
-                                      style: xxsRegular.copyWith(color: Colors.white38),
+                                      "${staff['role']} • Masuk jam ${staff['clockIn']}",
+                                      style: xxsRegular.copyWith(
+                                        color: Colors.white38,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -868,14 +934,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                               IconButton(
                                 icon: Icon(
                                   Icons.delete_outline_rounded,
-                                  color: const Color(0xFFFF6B6B).withValues(alpha: 0.6),
+                                  color: const Color(
+                                    0xFFFF6B6B,
+                                  ).withValues(alpha: 0.6),
                                   size: 20,
                                 ),
                                 onPressed: () => _deleteStaffShift(
                                   staff['id'],
                                   staff['name'],
                                 ),
-                                tooltip: "Delete Shift Record",
+                                tooltip: "Hapus Catatan Shift",
                               ),
                             ],
                           ),
@@ -894,7 +962,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "BEST SELLING PRODUCTS TODAY",
+          "PRODUK TERLARIS HARI INI",
           style: xsBold.copyWith(
             color: Colors.white.withValues(alpha: 0.3),
             letterSpacing: 1.2,
@@ -906,7 +974,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: spacing4, vertical: spacing3),
+              padding: const EdgeInsets.symmetric(
+                horizontal: spacing4,
+                vertical: spacing3,
+              ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 color: Colors.white.withValues(alpha: 0.05),
@@ -934,7 +1005,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           height: 36,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: const Color(0xFFE27D00).withValues(alpha: 0.1),
+                            color: const Color(
+                              0xFFE27D00,
+                            ).withValues(alpha: 0.1),
                           ),
                           child: const Icon(
                             Icons.local_cafe_outlined,
@@ -954,7 +1027,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 "Total: ${item['sales']}",
-                                style: xxsRegular.copyWith(color: Colors.white38),
+                                style: xxsRegular.copyWith(
+                                  color: Colors.white38,
+                                ),
                               ),
                             ],
                           ),
@@ -965,12 +1040,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           children: [
                             Text(
                               currencyFormatter.format(item['revenue']),
-                              style: smBold.copyWith(color: const Color(0xFF2D8A4E)),
+                              style: smBold.copyWith(
+                                color: const Color(0xFF2D8A4E),
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               item['trend'],
-                              style: xxsBold.copyWith(color: const Color(0xFF2D8A4E)),
+                              style: xxsBold.copyWith(
+                                color: const Color(0xFF2D8A4E),
+                              ),
                             ),
                           ],
                         ),
@@ -991,7 +1070,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "LOW STOCK ALERTS",
+          "PERINGATAN STOK MENIPIS",
           style: xsBold.copyWith(
             color: Colors.white.withValues(alpha: 0.3),
             letterSpacing: 1.2,
@@ -1003,7 +1082,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: spacing4, vertical: spacing3),
+              padding: const EdgeInsets.symmetric(
+                horizontal: spacing4,
+                vertical: spacing3,
+              ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 color: Colors.white.withValues(alpha: 0.05),
@@ -1031,7 +1113,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           height: 36,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: const Color(0xFFFF6B6B).withValues(alpha: 0.1),
+                            color: const Color(
+                              0xFFFF6B6B,
+                            ).withValues(alpha: 0.1),
                           ),
                           child: const Icon(
                             Icons.warning_amber_rounded,
@@ -1050,25 +1134,36 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                "Stock level: ${item['stock']}",
-                                style: xxsRegular.copyWith(color: const Color(0xFFFF8A8A)),
+                                "Level stok: ${item['stock']}",
+                                style: xxsRegular.copyWith(
+                                  color: const Color(0xFFFF8A8A),
+                                ),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: spacing2),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(6),
-                            color: const Color(0xFFFF6B6B).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFFFF6B6B,
+                            ).withValues(alpha: 0.15),
                             border: Border.all(
-                              color: const Color(0xFFFF6B6B).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFFFF6B6B,
+                              ).withValues(alpha: 0.3),
                             ),
                           ),
                           child: Text(
-                            "RESTOCK",
-                            style: xxxsBold.copyWith(color: const Color(0xFFFF8A8A)),
+                            "ISI ULANG",
+                            style: xxxsBold.copyWith(
+                              color: const Color(0xFFFF8A8A),
+                            ),
                           ),
                         ),
                       ],
@@ -1088,7 +1183,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "RECENT TRANSACTIONS",
+          "TRANSAKSI TERBARU",
           style: xsBold.copyWith(
             color: Colors.white.withValues(alpha: 0.3),
             letterSpacing: 1.2,
@@ -1100,7 +1195,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: spacing4, vertical: spacing3),
+              padding: const EdgeInsets.symmetric(
+                horizontal: spacing4,
+                vertical: spacing3,
+              ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 color: Colors.white.withValues(alpha: 0.05),
@@ -1128,7 +1226,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           height: 36,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: const Color(0xFF2D8A4E).withValues(alpha: 0.1),
+                            color: const Color(
+                              0xFF2D8A4E,
+                            ).withValues(alpha: 0.1),
                           ),
                           child: const Icon(
                             Icons.receipt_long_outlined,
@@ -1148,7 +1248,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 trx['items'],
-                                style: xxsRegular.copyWith(color: Colors.white38),
+                                style: xxsRegular.copyWith(
+                                  color: Colors.white38,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1161,7 +1263,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           children: [
                             Text(
                               currencyFormatter.format(trx['amount']),
-                              style: smBold.copyWith(color: const Color(0xFFFF9E22)),
+                              style: smBold.copyWith(
+                                color: const Color(0xFFFF9E22),
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -1217,7 +1321,10 @@ class _SalesChartPainter extends CustomPainter {
 
     for (int i = 0; i < dataPoints.length; i++) {
       final double x = i * stepX;
-      final double y = size.height - ((dataPoints[i] - minVal) / range) * (size.height - 18) - 9;
+      final double y =
+          size.height -
+          ((dataPoints[i] - minVal) / range) * (size.height - 18) -
+          9;
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -1253,7 +1360,10 @@ class _SalesChartPainter extends CustomPainter {
 
     for (int i = 0; i < dataPoints.length; i++) {
       final double x = i * stepX;
-      final double y = size.height - ((dataPoints[i] - minVal) / range) * (size.height - 18) - 9;
+      final double y =
+          size.height -
+          ((dataPoints[i] - minVal) / range) * (size.height - 18) -
+          9;
       canvas.drawCircle(Offset(x, y), 4.5, dotPaint);
       canvas.drawCircle(Offset(x, y), 4.5, borderPaint);
     }
