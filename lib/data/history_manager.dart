@@ -140,6 +140,52 @@ class HistoryManager {
           TransactionItem(name: "Ayam Bakar 1 Ekor", qty: 1, price: 45500),
         ],
       ),
+      TransactionHistory(
+        id: "TRX-55391",
+        customerName: "Budi",
+        dateTime: now.subtract(const Duration(days: 3)),
+        totalAmount: 65000,
+        paymentMethod: "Cash",
+        paidAmount: 100000,
+        changeAmount: 35000,
+        items: [
+          TransactionItem(name: "Caramel Latte Ice", qty: 2, price: 25000),
+          TransactionItem(name: "Roti Bakar Cokelat", qty: 1, price: 15000),
+        ],
+      ),
+      TransactionHistory(
+        id: "TRX-77402",
+        customerName: "Citra",
+        dateTime: now.subtract(const Duration(days: 5)),
+        totalAmount: 90000,
+        paymentMethod: "QRIS",
+        items: [
+          TransactionItem(name: "Espresso Single", qty: 3, price: 18000),
+          TransactionItem(name: "Croissant Almond", qty: 1, price: 36000),
+        ],
+      ),
+      TransactionHistory(
+        id: "TRX-33129",
+        customerName: "Eko",
+        dateTime: now.subtract(const Duration(days: 10)),
+        totalAmount: 40000,
+        paymentMethod: "Cash",
+        paidAmount: 50000,
+        changeAmount: 10000,
+        items: [
+          TransactionItem(name: "Cappuccino Hot", qty: 2, price: 20000),
+        ],
+      ),
+      TransactionHistory(
+        id: "TRX-99881",
+        customerName: "Fajar",
+        dateTime: now.subtract(const Duration(days: 18)),
+        totalAmount: 75000,
+        paymentMethod: "QRIS",
+        items: [
+          TransactionItem(name: "Hazelnut Latte Ice", qty: 3, price: 25000),
+        ],
+      ),
     ]);
 
     // Dummy Log Stok
@@ -221,6 +267,38 @@ class HistoryManager {
         category: "Operational",
         notes: "Stok mendesak untuk akhir pekan",
         createdAt: now.subtract(const Duration(days: 1)),
+      ),
+      ExpenseModel(
+        id: "EXP-3321",
+        title: "Beli Gas Elpiji 3kg",
+        amount: 22000,
+        category: "Operational",
+        notes: "Untuk kompor dapur memasak makanan",
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+      ExpenseModel(
+        id: "EXP-4490",
+        title: "Perbaikan Gagang Pintu Belakang",
+        amount: 45000,
+        category: "Others",
+        notes: "Gagang pintu rusak dol",
+        createdAt: now.subtract(const Duration(days: 5)),
+      ),
+      ExpenseModel(
+        id: "EXP-5512",
+        title: "Beli Susu Kaleng 1 Karton",
+        amount: 180000,
+        category: "Ingredients",
+        notes: "Bahan creamer kopi susu manis",
+        createdAt: now.subtract(const Duration(days: 10)),
+      ),
+      ExpenseModel(
+        id: "EXP-6677",
+        title: "Beli Sedotan Kertas 5 Pack",
+        amount: 25000,
+        category: "Operational",
+        notes: "Sedotan ramah lingkungan",
+        createdAt: now.subtract(const Duration(days: 18)),
       ),
     ]);
   }

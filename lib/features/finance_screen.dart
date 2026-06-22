@@ -26,10 +26,26 @@ class _FinanceScreenState extends State<FinanceScreen>
   );
   final dateFormatter = DateFormat('dd MMM yyyy, HH:mm');
 
+  DateTime _selectedDate = DateTime.now();
+  int _activeTabIndex = 0;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        setState(() {
+          _activeTabIndex = _tabController.index;
+        });
+      } else {
+        if (_activeTabIndex != _tabController.index) {
+          setState(() {
+            _activeTabIndex = _tabController.index;
+          });
+        }
+      }
+    });
   }
 
   @override
@@ -38,16 +54,26 @@ class _FinanceScreenState extends State<FinanceScreen>
     super.dispose();
   }
 
+  bool _isWithinDateRange(DateTime date) {
+    final target = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final itemDate = DateTime(date.year, date.month, date.day);
+    return itemDate.isAtSameMomentAs(target);
+  }
+
   // Menghitung akumulasi statistik keuangan
   Map<String, double> _calculateFinanceStats() {
     double totalIncome = 0;
     for (var tx in HistoryManager().transactions) {
-      totalIncome += tx.totalAmount;
+      if (_isWithinDateRange(tx.dateTime)) {
+        totalIncome += tx.totalAmount;
+      }
     }
 
     double totalExpenses = 0;
     for (var exp in HistoryManager().expenses) {
-      totalExpenses += exp.amount;
+      if (exp.createdAt != null && _isWithinDateRange(exp.createdAt!)) {
+        totalExpenses += exp.amount;
+      }
     }
 
     double netProfit = totalIncome - totalExpenses;
@@ -59,6 +85,161 @@ class _FinanceScreenState extends State<FinanceScreen>
     };
   }
 
+  String _getFriendlyDateLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final checkDate = DateTime(date.year, date.month, date.day);
+
+    final dateStr = DateFormat('dd MMM yyyy').format(date);
+    if (checkDate.isAtSameMomentAs(today)) {
+      return "Hari Ini ($dateStr)";
+    } else if (checkDate.isAtSameMomentAs(yesterday)) {
+      return "Kemarin ($dateStr)";
+    } else {
+      final weekdays = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+      final dayName = weekdays[date.weekday - 1];
+      return "$dayName, $dateStr";
+    }
+  }
+
+  bool _canGoToNextDay() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final current = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    return current.isBefore(today);
+  }
+
+  Widget _buildDateSelector() {
+    final canGoNext = _canGoToNextDay();
+    return Container(
+      margin: const EdgeInsets.only(bottom: spacing5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Left arrow (Kemarin / Hari Sebelumnya)
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              setState(() {
+                _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(spacing2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.03),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+              child: const Icon(
+                Icons.chevron_left_rounded,
+                color: Colors.white70,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: spacing4),
+
+          // Central Date Display
+          GestureDetector(
+            onTap: () async {
+              HapticFeedback.mediumImpact();
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(), // Membatasi tanggal maksimal adalah HARI INI
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: const ColorScheme.dark(
+                        primary: primaryColor,
+                        onPrimary: Colors.white,
+                        surface: Color(0xFF2A1A0A),
+                        onSurface: Colors.white,
+                      ),
+                      dialogBackgroundColor: const Color(0xFF1C1207),
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+              if (picked != null) {
+                setState(() {
+                  _selectedDate = picked;
+                });
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: spacing5,
+                vertical: spacing3,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(100),
+                color: Colors.white.withValues(alpha: 0.04),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.calendar_month_rounded,
+                    color: primaryColor,
+                    size: 16,
+                  ),
+                  const SizedBox(width: spacing2 + 2),
+                  Text(
+                    _getFriendlyDateLabel(_selectedDate),
+                    style: sBold.copyWith(
+                      color: Colors.white,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: spacing4),
+
+          // Right arrow (Besok / Hari Setelahnya)
+          GestureDetector(
+            onTap: canGoNext
+                ? () {
+                    HapticFeedback.lightImpact();
+                    setState(() {
+                      _selectedDate = _selectedDate.add(const Duration(days: 1));
+                    });
+                  }
+                : null,
+            child: Container(
+              padding: const EdgeInsets.all(spacing2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.03),
+                border: Border.all(
+                  color: Colors.white.withValues(
+                    alpha: canGoNext ? 0.08 : 0.02,
+                  ),
+                ),
+              ),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: canGoNext ? Colors.white70 : Colors.white10,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Membuka form tambah pengeluaran dalam bottom sheet glassmorphic
   void _showAddExpenseSheet() {
     HapticFeedback.mediumImpact();
@@ -67,6 +248,7 @@ class _FinanceScreenState extends State<FinanceScreen>
     final amountController = TextEditingController();
     final notesController = TextEditingController();
     String selectedCategory = 'Operational';
+    DateTime selectedDate = DateTime.now();
 
     // Pilihan kategori dalam dropdown
     final List<Map<String, String>> categories = [
@@ -265,6 +447,71 @@ class _FinanceScreenState extends State<FinanceScreen>
                         ),
                         const SizedBox(height: spacing4),
 
+                        // Tanggal Pengeluaran Field
+                        Text(
+                          "Tanggal Pengeluaran",
+                          style: xsBold.copyWith(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 6),
+                        GestureDetector(
+                          onTap: () async {
+                            HapticFeedback.lightImpact();
+                            final picked = await showDatePicker(
+                              context: ctx,
+                              initialDate: selectedDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                              builder: (context, child) {
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    colorScheme: const ColorScheme.dark(
+                                      primary: primaryColor,
+                                      onPrimary: Colors.white,
+                                      surface: Color(0xFF2A1A0A),
+                                      onSurface: Colors.white,
+                                    ),
+                                    dialogBackgroundColor: const Color(0xFF1C1207),
+                                  ),
+                                  child: child!,
+                                );
+                              },
+                            );
+                            if (picked != null) {
+                              setSheetState(() {
+                                selectedDate = picked;
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: spacing3,
+                              vertical: spacing4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.03),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  DateFormat('dd MMMM yyyy').format(selectedDate),
+                                  style: sMedium.copyWith(color: Colors.white),
+                                ),
+                                const Icon(
+                                  Icons.calendar_month_rounded,
+                                  color: Colors.white30,
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: spacing4),
+
                         // Catatan Tambahan (Opsional)
                         Text(
                           "Catatan Tambahan (Opsional)",
@@ -342,7 +589,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                                       amount: amount,
                                       category: selectedCategory,
                                       notes: notes.isNotEmpty ? notes : null,
-                                      createdAt: DateTime.now(),
+                                      createdAt: selectedDate,
                                     );
 
                                     HistoryManager().addExpense(newExp);
@@ -365,6 +612,376 @@ class _FinanceScreenState extends State<FinanceScreen>
                                   padding: const EdgeInsets.symmetric(
                                     vertical: spacing4,
                                   ),
+                                ),
+                                child: Text(
+                                  "Simpan",
+                                  style: sBold.copyWith(color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: spacing4),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // Membuka form tambah pemasukan manual dalam bottom sheet glassmorphic
+  void _showAddIncomeSheet() {
+    HapticFeedback.mediumImpact();
+    final formKey = GlobalKey<FormState>();
+    final titleController = TextEditingController();
+    final amountController = TextEditingController();
+    final notesController = TextEditingController();
+    String selectedPaymentMethod = 'Cash';
+    DateTime selectedDate = DateTime.now();
+
+    final List<String> paymentMethods = ['Cash', 'QRIS'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setSheetState) {
+          return ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: Container(
+                padding: EdgeInsets.only(
+                  left: spacing6,
+                  right: spacing6,
+                  top: spacing6,
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom + spacing6,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                  color: const Color(0xFF2A1A0A).withValues(alpha: 0.95),
+                  border: Border(
+                    top: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      width: 1.2,
+                    ),
+                  ),
+                ),
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: spacing5),
+
+                        Text(
+                          "Catat Pemasukan Manual",
+                          style: lgBold.copyWith(color: Colors.white),
+                        ),
+                        const SizedBox(height: spacing4),
+
+                        // Title Field
+                        Text(
+                          "Judul Pemasukan",
+                          style: xsBold.copyWith(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.03),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: TextFormField(
+                            controller: titleController,
+                            style: sMedium.copyWith(color: Colors.white),
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              hintText: "Contoh: Penjualan Kopi Bubuk, Event offline",
+                              hintStyle: sMedium.copyWith(color: Colors.white24),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Judul pemasukan tidak boleh kosong';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: spacing4),
+
+                        // Amount Field
+                        Text(
+                          "Nominal (Rp)",
+                          style: xsBold.copyWith(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.03),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: TextFormField(
+                            controller: amountController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            style: sMedium.copyWith(color: Colors.white),
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              hintText: "Contoh: 50000",
+                              hintStyle: sMedium.copyWith(color: Colors.white24),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Nominal pemasukan tidak boleh kosong';
+                              }
+                              final parsed = double.tryParse(value);
+                              if (parsed == null || parsed <= 0) {
+                                return 'Masukkan nominal yang valid (> 0)';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: spacing4),
+
+                        // Payment Method Field (Segmented look)
+                        Text(
+                          "Metode Pembayaran",
+                          style: xsBold.copyWith(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.white.withValues(alpha: 0.03),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: Row(
+                            children: paymentMethods.map((method) {
+                              final isSelected = selectedPaymentMethod == method;
+                              return Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    setSheetState(() {
+                                      selectedPaymentMethod = method;
+                                    });
+                                  },
+                                  child: Container(
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(9),
+                                      color: isSelected
+                                          ? primaryColor
+                                          : Colors.transparent,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      method,
+                                      style: sBold.copyWith(
+                                        color: isSelected ? Colors.white : Colors.white38,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: spacing4),
+
+                        // Date Field
+                        Text(
+                          "Tanggal Pemasukan",
+                          style: xsBold.copyWith(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 6),
+                        GestureDetector(
+                          onTap: () async {
+                            HapticFeedback.lightImpact();
+                            final picked = await showDatePicker(
+                              context: ctx,
+                              initialDate: selectedDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                              builder: (context, child) {
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    colorScheme: const ColorScheme.dark(
+                                      primary: primaryColor,
+                                      onPrimary: Colors.white,
+                                      surface: Color(0xFF2A1A0A),
+                                      onSurface: Colors.white,
+                                    ),
+                                    dialogBackgroundColor: const Color(0xFF1C1207),
+                                  ),
+                                  child: child!,
+                                );
+                              },
+                            );
+                            if (picked != null) {
+                              setSheetState(() {
+                                selectedDate = picked;
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: spacing3,
+                              vertical: spacing4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.03),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  DateFormat('dd MMMM yyyy').format(selectedDate),
+                                  style: sMedium.copyWith(color: Colors.white),
+                                ),
+                                const Icon(
+                                  Icons.calendar_month_rounded,
+                                  color: Colors.white30,
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: spacing4),
+
+                        // Notes Field
+                        Text(
+                          "Catatan Tambahan (Opsional)",
+                          style: xsBold.copyWith(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.03),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: TextFormField(
+                            controller: notesController,
+                            maxLines: 2,
+                            style: sMedium.copyWith(color: Colors.white),
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              hintText: "Contoh: Hasil penjualan sisa event bazaar kemerdekaan",
+                              hintStyle: sMedium.copyWith(color: Colors.white24),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: spacing6),
+
+                        // Action Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  HapticFeedback.lightImpact();
+                                  Navigator.pop(ctx);
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.white30),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(vertical: spacing4),
+                                ),
+                                child: Text(
+                                  "Batal",
+                                  style: sBold.copyWith(color: Colors.white70),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: spacing4),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  if (formKey.currentState!.validate()) {
+                                    final title = titleController.text.trim();
+                                    final amount = double.parse(amountController.text.trim());
+                                    final notes = notesController.text.trim();
+
+                                    final newTx = TransactionHistory(
+                                      id: "TRX-MAN-${10000 + (DateTime.now().millisecond * 7) % 90000}",
+                                      customerName: "Manual (Owner)",
+                                      dateTime: selectedDate,
+                                      totalAmount: amount,
+                                      paymentMethod: selectedPaymentMethod,
+                                      paidAmount: amount,
+                                      changeAmount: 0,
+                                      items: [
+                                        TransactionItem(
+                                          name: title + (notes.isNotEmpty ? " ($notes)" : ""),
+                                          qty: 1,
+                                          price: amount,
+                                        ),
+                                      ],
+                                    );
+
+                                    HistoryManager().addTransaction(newTx);
+
+                                    Navigator.pop(ctx);
+                                    CustomFeedback.showSuccess(
+                                      context,
+                                      "Pemasukan '$title' berhasil dicatat!",
+                                    );
+                                    setState(() {});
+                                  } else {
+                                    HapticFeedback.heavyImpact();
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(vertical: spacing4),
                                 ),
                                 child: Text(
                                   "Simpan",
@@ -410,9 +1027,11 @@ class _FinanceScreenState extends State<FinanceScreen>
                     "Laporan Keuangan",
                     style: lgBold.copyWith(color: Colors.white),
                   ),
-                  // Button Tambah Pengeluaran
+                  // Button Tambah Dinamis
                   GestureDetector(
-                    onTap: _showAddExpenseSheet,
+                    onTap: _activeTabIndex == 0
+                        ? _showAddExpenseSheet
+                        : _showAddIncomeSheet,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -434,7 +1053,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            "Pengeluaran",
+                            _activeTabIndex == 0 ? "Pengeluaran" : "Pemasukan",
                             style: xxsBold.copyWith(color: primaryColor),
                           ),
                         ],
@@ -444,6 +1063,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                 ],
               ),
             ),
+
+            // Date Filter Horizontal Bar
+            _buildDateSelector(),
 
             // Summary Card (Glassmorphic)
             Padding(
@@ -643,7 +1265,9 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   // ── TAB 1: DAFTAR LOG PENGELUARAN ──
   Widget _buildExpensesTab() {
-    final expensesList = HistoryManager().expenses;
+    final expensesList = HistoryManager().expenses.where((exp) {
+      return exp.createdAt != null && _isWithinDateRange(exp.createdAt!);
+    }).toList();
 
     if (expensesList.isEmpty) {
       return _buildEmptyState(
@@ -778,7 +1402,9 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   // ── TAB 2: DAFTAR LOG PEMASUKAN PENJUALAN ──
   Widget _buildIncomeTab() {
-    final transactions = HistoryManager().transactions;
+    final transactions = HistoryManager().transactions.where((tx) {
+      return _isWithinDateRange(tx.dateTime);
+    }).toList();
 
     if (transactions.isEmpty) {
       return _buildEmptyState(

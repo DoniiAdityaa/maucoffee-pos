@@ -7,6 +7,8 @@ import 'package:maucoffee/data/history_manager.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -18,6 +20,37 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final Map<String, bool> _expandedTransactions = {};
+  DateTime _selectedDate = DateTime.now();
+
+  bool get _isAdmin {
+    final userPrefs = serviceLocator<UserPreference>();
+    return userPrefs.getLoginRole() == 'admin';
+  }
+
+  bool _canGoToNextDay() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final current = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    return current.isBefore(today);
+  }
+
+  String _getFriendlyDateLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final checkDate = DateTime(date.year, date.month, date.day);
+
+    final dateStr = DateFormat('dd MMM yyyy').format(date);
+    if (checkDate.isAtSameMomentAs(today)) {
+      return "Hari Ini ($dateStr)";
+    } else if (checkDate.isAtSameMomentAs(yesterday)) {
+      return "Kemarin ($dateStr)";
+    } else {
+      final weekdays = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+      final dayName = weekdays[date.weekday - 1];
+      return "$dayName, $dateStr";
+    }
+  }
 
   final currencyFormatter = NumberFormat.currency(
     locale: 'id_ID',
@@ -39,25 +72,162 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  Widget _buildDateSelector() {
+    final canGoNext = _canGoToNextDay();
+    return Container(
+      margin: const EdgeInsets.only(bottom: spacing5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Left arrow (Kemarin / Hari Sebelumnya)
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              setState(() {
+                _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(spacing2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.03),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+              child: const Icon(
+                Icons.chevron_left_rounded,
+                color: Colors.white70,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: spacing4),
+
+          // Central Date Display
+          GestureDetector(
+            onTap: () async {
+              HapticFeedback.mediumImpact();
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(), // Membatasi tanggal maksimal adalah HARI INI
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: const ColorScheme.dark(
+                        primary: primaryColor,
+                        onPrimary: Colors.white,
+                        surface: Color(0xFF2A1A0A),
+                        onSurface: Colors.white,
+                      ),
+                      dialogBackgroundColor: const Color(0xFF1C1207),
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+              if (picked != null) {
+                setState(() {
+                  _selectedDate = picked;
+                });
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: spacing5,
+                vertical: spacing3,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(100),
+                color: Colors.white.withValues(alpha: 0.04),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.calendar_month_rounded,
+                    color: primaryColor,
+                    size: 16,
+                  ),
+                  const SizedBox(width: spacing2 + 2),
+                  Text(
+                    _getFriendlyDateLabel(_selectedDate),
+                    style: sBold.copyWith(
+                      color: Colors.white,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: spacing4),
+
+          // Right arrow (Besok / Hari Setelahnya)
+          GestureDetector(
+            onTap: canGoNext
+                ? () {
+                    HapticFeedback.lightImpact();
+                    setState(() {
+                      _selectedDate = _selectedDate.add(const Duration(days: 1));
+                    });
+                  }
+                : null,
+            child: Container(
+              padding: const EdgeInsets.all(spacing2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.03),
+                border: Border.all(
+                  color: Colors.white.withValues(
+                    alpha: canGoNext ? 0.08 : 0.02,
+                  ),
+                ),
+              ),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: canGoNext ? Colors.white70 : Colors.white10,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Menghitung statistik dinamis dari HistoryManager
   Map<String, double> _calculateStats() {
     double totalRevenueToday = 0;
-    final now = DateTime.now();
-
-    final txList = HistoryManager().transactions;
-    for (var tx in txList) {
-      // Saring transaksi untuk hari ini saja
-      if (tx.dateTime.year == now.year &&
-          tx.dateTime.month == now.month &&
-          tx.dateTime.day == now.day) {
+    final targetDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    
+    int txCount = 0;
+    for (var tx in HistoryManager().transactions) {
+      final txDate = DateTime(tx.dateTime.year, tx.dateTime.month, tx.dateTime.day);
+      if (txDate.isAtSameMomentAs(targetDate)) {
         totalRevenueToday += tx.totalAmount;
+        txCount++;
+      }
+    }
+    
+    int logCount = 0;
+    for (var log in HistoryManager().stockLogs) {
+      final logDate = DateTime(log.dateTime.year, log.dateTime.month, log.dateTime.day);
+      if (logDate.isAtSameMomentAs(targetDate)) {
+        logCount++;
       }
     }
 
     return {
       "revenue": totalRevenueToday,
-      "transactions": txList.length.toDouble(),
-      "stockLogs": HistoryManager().stockLogs.length.toDouble(),
+      "transactions": txCount.toDouble(),
+      "stockLogs": logCount.toDouble(),
     };
   }
 
@@ -83,13 +253,15 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
               ),
             ),
 
+            if (_isAdmin) _buildDateSelector(),
+
             // Ringkasan Statistik Dinamis (Glassmorphic Cards)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: spacing6),
               child: Row(
                 children: [
                   _buildStatCard(
-                    "Omzet Hari Ini",
+                    _isAdmin ? "Omzet Harian" : "Omzet Hari Ini",
                     currencyFormatter.format(stats["revenue"]),
                     primaryColor,
                     Icons.monetization_on_rounded,
@@ -199,7 +371,11 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
 
   // ── TAB 1: RIWAYAT TRANSAKSI PENJUALAN ──
   Widget _buildTransactionTab() {
-    final transactions = HistoryManager().transactions;
+    final targetDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final transactions = HistoryManager().transactions.where((tx) {
+      final txDate = DateTime(tx.dateTime.year, tx.dateTime.month, tx.dateTime.day);
+      return txDate.isAtSameMomentAs(targetDate);
+    }).toList();
 
     if (transactions.isEmpty) {
       return _buildEmptyState("Belum ada riwayat transaksi penjualan.");
@@ -358,16 +534,54 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                         ),
                         const SizedBox(height: spacing2),
                         if (tx.qrisProofPath != null && tx.qrisProofPath!.isNotEmpty)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(tx.qrisProofPath!),
-                              height: 150,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return _buildImageErrorPlaceholder();
-                              },
+                          GestureDetector(
+                            onTap: () => _showFullImageDialog(context, tx.qrisProofPath!),
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Stack(
+                                  alignment: Alignment.bottomRight,
+                                  children: [
+                                    Image.file(
+                                      File(tx.qrisProofPath!),
+                                      height: 150,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return _buildImageErrorPlaceholder();
+                                      },
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      margin: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.6),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.fullscreen_rounded,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            "Perbesar",
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           )
                         else
@@ -424,7 +638,11 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
 
   // ── TAB 2: RIWAYAT LOG STOK BAHAN BAKU ──
   Widget _buildStockLogTab() {
-    final stockLogs = HistoryManager().stockLogs;
+    final targetDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final stockLogs = HistoryManager().stockLogs.where((log) {
+      final logDate = DateTime(log.dateTime.year, log.dateTime.month, log.dateTime.day);
+      return logDate.isAtSameMomentAs(targetDate);
+    }).toList();
 
     if (stockLogs.isEmpty) {
       return _buildEmptyState("Belum ada log penyesuaian stok bahan.");
@@ -557,6 +775,71 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+
+  void _showFullImageDialog(BuildContext context, String imagePath) {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: spacing4,
+          vertical: spacing6,
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Backdrop Blur Effect
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            // Gambar interaktif dengan pinch-to-zoom
+            GestureDetector(
+              onTap: () {}, // Mencegah click pada gambar menutup dialog
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: InteractiveViewer(
+                  panEnabled: true,
+                  minScale: 0.5,
+                  maxScale: 4.0,
+                  child: Image.file(
+                    File(imagePath),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+
+            // Tombol Tutup di pojok kanan atas
+            Positioned(
+              top: spacing2,
+              right: spacing2,
+              child: ClipOval(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

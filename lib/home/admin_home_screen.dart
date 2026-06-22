@@ -24,6 +24,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   String _welcomeSubtitle = "Kelola tokomu dan tim dari sini";
   bool _isAdmin = true;
 
+  // locked staff
+  final bool isLocked = true;
+
   // Store status state
   bool _isStoreOpen = false;
   DateTime? _storeOpenTime;
@@ -184,7 +187,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     setState(() {
       _activeStaffShift.removeWhere((staff) => staff['id'] == id);
     });
-    CustomFeedback.showSuccess(context, "Catatan shift $name berhasil dihapus.");
+    CustomFeedback.showSuccess(
+      context,
+      "Catatan shift $name berhasil dihapus.",
+    );
   }
 
   // Helper duration formatter (HH:MM:SS)
@@ -462,37 +468,44 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             ),
           ),
           // Register Staff Button (+user icon)
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.push(
-                context,
-                PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) =>
-                      const AdminScanEmployeeScreen(),
-                  transitionDuration: const Duration(milliseconds: 400),
-                  transitionsBuilder:
-                      (context, animation, secondaryAnimation, child) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
+          if (_isAdmin) ...[
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const AdminScanEmployeeScreen(),
+                    transitionDuration: const Duration(milliseconds: 400),
+                    transitionsBuilder:
+                        (context, animation, secondaryAnimation, child) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          );
+                        },
+                  ),
+                );
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.06),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
                 ),
-              );
-            },
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.06),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: const Icon(
-                Icons.person_add_alt_1_rounded,
-                color: Color(0xFFE27D00),
-                size: 18,
+                child: const Icon(
+                  Icons.person_add_alt_1_rounded,
+                  color: Color(0xFFE27D00),
+                  size: 18,
+                ),
               ),
             ),
-          ),
+          ],
           const SizedBox(width: spacing3),
           // Logout Trigger Button
           GestureDetector(
@@ -794,11 +807,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
-                          color: const Color(0xFF2D8A4E).withValues(alpha: 0.12),
+                          color: const Color(
+                            0xFF2D8A4E,
+                          ).withValues(alpha: 0.12),
                         ),
                         child: Text(
                           "+15.4%",
-                          style: xxsBold.copyWith(color: const Color(0xFF2D8A4E)),
+                          style: xxsBold.copyWith(
+                            color: const Color(0xFF2D8A4E),
+                          ),
                         ),
                       ),
                     ],

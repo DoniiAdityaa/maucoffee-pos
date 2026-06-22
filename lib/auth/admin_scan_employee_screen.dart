@@ -178,6 +178,10 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
     bool isValidating = false;
     String? errorMessage;
 
+    // Matikan kamera sebelum modal input dibuka agar menghemat CPU/baterai
+    _controller.stop();
+    _scanLineController.stop();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -393,6 +397,9 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                                         } else {
                                           setDialogState(() {
                                             isValidating = false;
+                                          });
+                                          setState(() {
+                                            _isProcessed = true;
                                           });
                                           Navigator.pop(context);
                                           _navigateToRegisterForm(val);

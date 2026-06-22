@@ -6,7 +6,7 @@ import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
-import 'package:maucoffee/ui/widget_sharing/cash_payment_widget.dart';
+import 'package:maucoffee/utility/rupiah_formatter.dart';
 import 'package:maucoffee/ui/widget_sharing/success_dialog.dart';
 import 'package:maucoffee/ui/widget_sharing/qris_payment_widget.dart';
 import 'package:maucoffee/data/history_manager.dart';
@@ -242,10 +242,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
         horizontal: spacing6,
         vertical: spacing4,
       ),
-      child: Text(
-        "Order Item",
-        style: lgBold.copyWith(color: Colors.white),
-      ),
+      child: Text("Order Item", style: lgBold.copyWith(color: Colors.white)),
     );
   }
 
@@ -348,91 +345,104 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: spacing3),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: const Color(0xFF2A1A0A).withOpacity(0.35),
-          border: Border.all(color: Colors.white.withOpacity(0.05), width: 1.2),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(spacing4),
-          child: Row(
-            children: [
-              // Product Image / Initial Placeholder
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: primaryColor.withOpacity(0.2),
-                    width: 1,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          hasStock ? _addToCart(product) : null;
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: spacing3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: const Color(0xFF2A1A0A).withOpacity(0.35),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.05),
+              width: 1.2,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(spacing4),
+            child: Row(
+              children: [
+                // Product Image / Initial Placeholder
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryColor.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    product.name.isNotEmpty
+                        ? product.name[0].toUpperCase()
+                        : "",
+                    style: lgBold.copyWith(color: primaryColor),
                   ),
                 ),
-                alignment: Alignment.center,
-                child: Text(
-                  product.name.isNotEmpty ? product.name[0].toUpperCase() : "",
-                  style: lgBold.copyWith(color: primaryColor),
-                ),
-              ),
-              const SizedBox(width: spacing4),
+                const SizedBox(width: spacing4),
 
-              // Product Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.name,
-                      style: smBold.copyWith(color: Colors.white),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "$stockText • ${currencyFormatter.format(product.price)}",
-                      style: xsMedium.copyWith(
-                        color: hasStock ? Colors.white60 : Colors.redAccent,
+                // Product Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        style: smBold.copyWith(color: Colors.white),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        "$stockText • ${currencyFormatter.format(product.price)}",
+                        style: xsMedium.copyWith(
+                          color: hasStock ? Colors.white60 : Colors.redAccent,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: spacing3),
+                const SizedBox(width: spacing3),
 
-              // Quantity Selector
-              if (cartQty > 0) ...[
+                // Quantity Selector
+                if (cartQty > 0) ...[
+                  IconButton(
+                    icon: const Icon(
+                      Icons.remove_circle_outline_rounded,
+                      color: Colors.redAccent,
+                      size: 28,
+                    ),
+                    onPressed: () => _removeFromCart(product),
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: spacing2),
+                    child: Text(
+                      "$cartQty",
+                      style: smBold.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
                 IconButton(
-                  icon: const Icon(
-                    Icons.remove_circle_outline_rounded,
-                    color: Colors.redAccent,
+                  icon: Icon(
+                    Icons.add_circle_rounded,
+                    color: hasStock
+                        ? primaryColor
+                        : Colors.grey.withOpacity(0.5),
                     size: 28,
                   ),
-                  onPressed: () => _removeFromCart(product),
+                  onPressed: hasStock ? () => _addToCart(product) : null,
                   constraints: const BoxConstraints(),
                   padding: EdgeInsets.zero,
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: spacing2),
-                  child: Text(
-                    "$cartQty",
-                    style: smBold.copyWith(color: Colors.white),
-                  ),
-                ),
               ],
-              IconButton(
-                icon: Icon(
-                  Icons.add_circle_rounded,
-                  color: hasStock ? primaryColor : Colors.grey.withOpacity(0.5),
-                  size: 28,
-                ),
-                onPressed: hasStock ? () => _addToCart(product) : null,
-                constraints: const BoxConstraints(),
-                padding: EdgeInsets.zero,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -536,6 +546,12 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) {
         String selectedPayment = "Cash";
+        final totalPrice = _getCartTotal();
+        final cashPaidController = TextEditingController(
+          text: NumberFormat.decimalPattern('id').format(totalPrice),
+        );
+        double paidAmount = totalPrice;
+        final suggestions = _getSuggestions(totalPrice);
 
         return ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -637,11 +653,15 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                       ),
                       const SizedBox(height: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: spacing3,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.03),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.08),
+                          ),
                         ),
                         child: TextField(
                           controller: nameController,
@@ -651,7 +671,9 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                             hintStyle: sMedium.copyWith(color: Colors.white30),
                             border: InputBorder.none,
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
@@ -767,54 +789,234 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                           ),
                         ],
                       ),
+                      if (selectedPayment == "Cash") ...[
+                        const SizedBox(height: spacing4),
+                        // Uang Diterima (Pilihan Cepat)
+                        Text(
+                          "Uang Diterima (Pilihan Cepat)",
+                          style: xsBold.copyWith(color: Colors.white70),
+                        ),
+                        const SizedBox(height: spacing2),
+                        Wrap(
+                          spacing: spacing2,
+                          runSpacing: spacing2,
+                          children: suggestions.map((amount) {
+                            final bool isSelected = paidAmount == amount;
+                            final bool isExact = amount == totalPrice;
+                            final String label = isExact
+                                ? "Uang Pas"
+                                : currencyFormatter.format(amount);
+
+                            return ChoiceChip(
+                              label: Text(
+                                label,
+                                style: xxsBold.copyWith(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.white70,
+                                ),
+                              ),
+                              selected: isSelected,
+                              selectedColor: primaryColor,
+                              backgroundColor: const Color(
+                                0xFF2A1A0A,
+                              ).withOpacity(0.50),
+                              onSelected: (_) {
+                                HapticFeedback.lightImpact();
+                                setModalState(() {
+                                  paidAmount = amount;
+                                  cashPaidController.text =
+                                      NumberFormat.decimalPattern(
+                                        'id',
+                                      ).format(amount);
+                                });
+                              },
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? primaryColor
+                                      : Colors.white.withOpacity(0.08),
+                                  width: 1,
+                                ),
+                              ),
+                              showCheckmark: false,
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: spacing4),
+
+                        // Input nominal manual
+                        Text(
+                          "Jumlah Tunai Input Manual",
+                          style: xsBold.copyWith(color: Colors.white70),
+                        ),
+                        const SizedBox(height: spacing2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: spacing3,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.white.withOpacity(0.04),
+                            border: Border.all(
+                              color: paidAmount < totalPrice
+                                  ? Colors.redAccent.withOpacity(0.5)
+                                  : Colors.white.withOpacity(0.08),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                "Rp",
+                                style: smBold.copyWith(color: Colors.white60),
+                              ),
+                              const SizedBox(width: spacing2),
+                              Expanded(
+                                child: TextField(
+                                  controller: cashPaidController,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [RupiahInputFormatter()],
+                                  style: smBold.copyWith(color: Colors.white),
+                                  onChanged: (val) {
+                                    final cleanVal = val.replaceAll('.', '');
+                                    final amount =
+                                        double.tryParse(cleanVal) ?? 0;
+                                    setModalState(() {
+                                      paidAmount = amount;
+                                    });
+                                  },
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    hintText: "Masukkan nominal tunai",
+                                    hintStyle: TextStyle(color: Colors.white30),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: spacing4),
+
+                        // Info kembalian / uang kurang
+                        if (paidAmount >= totalPrice)
+                          Container(
+                            padding: const EdgeInsets.all(spacing3),
+                            decoration: BoxDecoration(
+                              color: (paidAmount - totalPrice) == 0
+                                  ? primaryColor.withOpacity(0.1)
+                                  : const Color(0xFF2D8A4E).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: (paidAmount - totalPrice) == 0
+                                    ? primaryColor.withOpacity(0.3)
+                                    : const Color(0xFF2D8A4E).withOpacity(0.3),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  (paidAmount - totalPrice) == 0
+                                      ? Icons.check_circle_rounded
+                                      : Icons.monetization_on_rounded,
+                                  color: (paidAmount - totalPrice) == 0
+                                      ? primaryColor
+                                      : const Color(0xFF2D8A4E),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: spacing3),
+                                Text(
+                                  (paidAmount - totalPrice) == 0
+                                      ? "Uang Pas (Tidak ada kembalian)"
+                                      : "Kembalian: ${currencyFormatter.format(paidAmount - totalPrice)}",
+                                  style: sBold.copyWith(
+                                    color: (paidAmount - totalPrice) == 0
+                                        ? primaryColor
+                                        : const Color(0xFF2D8A4E),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.all(spacing3),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.redAccent.withOpacity(0.3),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  color: Colors.redAccent,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: spacing3),
+                                Text(
+                                  "Uang pembayaran kurang ${currencyFormatter.format(totalPrice - paidAmount)}",
+                                  style: sBold.copyWith(
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                       const SizedBox(height: spacing6),
 
                       // Single Confirm button
                       ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Close checkout bottom sheet
+                        onPressed:
+                            (selectedPayment == "Cash" &&
+                                paidAmount < totalPrice)
+                            ? null
+                            : () {
+                                Navigator.pop(
+                                  context,
+                                ); // Close checkout bottom sheet
 
-                          final customerName = nameController.text.trim().isEmpty
-                              ? "Pelanggan Umum"
-                              : nameController.text.trim();
+                                final customerName =
+                                    nameController.text.trim().isEmpty
+                                    ? "Pelanggan Umum"
+                                    : nameController.text.trim();
 
-                          if (selectedPayment == "Cash") {
-                            // Show cash payment bottom sheet
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (context) => CashPaymentBottomSheet(
-                                totalPrice: _getCartTotal(),
-                                onConfirm: (paid, change) {
+                                if (selectedPayment == "Cash") {
                                   _processCheckout(
                                     "Cash",
-                                    paidAmount: paid,
-                                    change: change,
+                                    paidAmount: paidAmount,
+                                    change: paidAmount - totalPrice,
                                     customerName: customerName,
                                   );
-                                },
-                              ),
-                            );
-                          } else {
-                            // Show QRIS payment bottom sheet
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (context) => QrisPaymentBottomSheet(
-                                totalPrice: _getCartTotal(),
-                                onConfirm: (imagePath) {
-                                  _processCheckout(
-                                    "QRIS",
-                                    customerName: customerName,
-                                    qrisProofPath: imagePath,
+                                } else {
+                                  // Show QRIS payment bottom sheet
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (context) =>
+                                        QrisPaymentBottomSheet(
+                                          totalPrice: totalPrice,
+                                          onConfirm: (imagePath) {
+                                            _processCheckout(
+                                              "QRIS",
+                                              customerName: customerName,
+                                              qrisProofPath: imagePath,
+                                            );
+                                          },
+                                        ),
                                   );
-                                },
-                              ),
-                            );
-                          }
-                        },
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
                           padding: const EdgeInsets.symmetric(
@@ -856,11 +1058,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
     _cart.forEach((id, qty) {
       final product = _products.firstWhere((p) => p.id == id);
       txItems.add(
-        TransactionItem(
-          name: product.name,
-          qty: qty,
-          price: product.price,
-        ),
+        TransactionItem(name: product.name, qty: qty, price: product.price),
       );
     });
 
@@ -880,19 +1078,77 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
 
     showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) => TransactionSuccessDialog(
-        transactionNumber: trxNum,
-        onFinish: () {
-          setState(() {
-            _cart.clear(); // Clear Cart
-          });
-          CustomFeedback.showSuccess(
-            context,
-            "Transaksi berhasil disimpan!",
-          );
-        },
-      ),
-    );
+      barrierDismissible: true,
+      builder: (ctx) =>
+          TransactionSuccessDialog(transactionNumber: trxNum, onFinish: () {}),
+    ).then((_) {
+      setState(() {
+        _cart.clear();
+      });
+    });
+  }
+
+  List<double> _getSuggestions(double totalPrice) {
+    final double T = totalPrice;
+    final List<double> suggestions = [];
+
+    // 1. Selalu sertakan uang pas
+    suggestions.add(T);
+
+    // Pecahan uang standar Rupiah
+    final List<double> standardNotes = [
+      2000,
+      5000,
+      10000,
+      20000,
+      50000,
+      100000,
+    ];
+
+    // 2. Tambahkan pecahan standar yang lebih besar dari T
+    for (var note in standardNotes) {
+      if (note > T) {
+        suggestions.add(note);
+      }
+    }
+
+    // 3. Tambahkan kelipatan bulat terdekat ke atas secara cerdas
+    if (T > 0) {
+      // Kelipatan 5.000 terdekat ke atas (jika T > 5000)
+      if (T > 5000) {
+        double next5k = ((T / 5000).ceil() * 5000).toDouble();
+        if (next5k > T) suggestions.add(next5k);
+      }
+
+      // Kelipatan 10.000 terdekat ke atas
+      double next10k = ((T / 10000).ceil() * 10000).toDouble();
+      if (next10k > T) suggestions.add(next10k);
+
+      // Kelipatan 20.000 terdekat ke atas
+      double next20k = ((T / 20000).ceil() * 20000).toDouble();
+      if (next20k > T) suggestions.add(next20k);
+
+      // Kelipatan 50.000 terdekat ke atas (jika T > 20000)
+      if (T > 20000) {
+        double next50k = ((T / 50000).ceil() * 50000).toDouble();
+        if (next50k > T) suggestions.add(next50k);
+      }
+
+      // Kelipatan 100.000 terdekat ke atas (jika T > 50000)
+      if (T > 50000) {
+        double next100k = ((T / 100000).ceil() * 100000).toDouble();
+        if (next100k > T) suggestions.add(next100k);
+      }
+    }
+
+    // Hapus duplikat, filter hanya nilai >= T, dan urutkan
+    final List<double> sorted = suggestions
+        .toSet()
+        .where((val) => val >= T)
+        .toList();
+    sorted.sort();
+
+    // Batasi maksimal 5 saran nominal agar UI tetap rapi
+    return sorted.take(5).toList();
   }
 }

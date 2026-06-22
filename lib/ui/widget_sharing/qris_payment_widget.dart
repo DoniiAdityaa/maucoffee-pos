@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:image/image.dart' as img;
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -24,6 +26,7 @@ class QrisPaymentBottomSheet extends StatefulWidget {
 
 class _QrisPaymentBottomSheetState extends State<QrisPaymentBottomSheet> {
   File? _imageFile;
+  bool _isProcessing = false;
   final ImagePicker _picker = ImagePicker();
 
   final currencyFormatter = NumberFormat.currency(
@@ -32,54 +35,87 @@ class _QrisPaymentBottomSheetState extends State<QrisPaymentBottomSheet> {
     decimalDigits: 0,
   );
 
+  Future<File> _cropTo43(File imageFile) async {
+    final bytes = await imageFile.readAsBytes();
+    final img.Image? originalImage = img.decodeImage(bytes);
+    if (originalImage == null) return imageFile;
+
+    final int width = originalImage.width;
+    final int height = originalImage.height;
+
+    int cropWidth = width;
+    int cropHeight = height;
+
+    // Aspek rasio target adalah 4:3 (width / height = 4 / 3)
+    if (width > height) {
+      cropWidth = (height * 4) ~/ 3;
+      if (cropWidth > width) {
+        cropWidth = width;
+        cropHeight = (width * 3) ~/ 4;
+      }
+    } else {
+      // Portrait target 3:4
+      cropHeight = (width * 4) ~/ 3;
+      if (cropHeight > height) {
+        cropHeight = height;
+        cropWidth = (height * 3) ~/ 4;
+      }
+    }
+
+    final int x = (width - cropWidth) ~/ 2;
+    final int y = (height - cropHeight) ~/ 2;
+
+    final img.Image croppedImage = img.copyCrop(
+      originalImage,
+      x: x,
+      y: y,
+      width: cropWidth,
+      height: cropHeight,
+    );
+
+    final croppedBytes = img.encodeJpg(croppedImage, quality: 85);
+    final directory = await getApplicationDocumentsDirectory();
+    final String newPath =
+        '${directory.path}/qris_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final File newFile = File(newPath);
+    await newFile.writeAsBytes(croppedBytes);
+
+    try {
+      await imageFile.delete();
+    } catch (_) {}
+
+    return newFile;
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     HapticFeedback.lightImpact();
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 70, // Kompres kualitas gambar
+        imageQuality: 85,
+        maxWidth: 1024,
+        maxHeight: 1024,
       );
       if (pickedFile != null) {
         setState(() {
-          _imageFile = File(pickedFile.path);
+          _isProcessing = true;
+        });
+
+        final File croppedFile = await _cropTo43(File(pickedFile.path));
+
+        setState(() {
+          _imageFile = croppedFile;
+          _isProcessing = false;
         });
       }
     } catch (e) {
-      debugPrint("Error picking image: $e");
+      setState(() {
+        _isProcessing = false;
+      });
+      debugPrint("Error picking/cropping image: $e");
     }
   }
 
-  void _showImageSourceActionSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF2A1A0A),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt_rounded, color: primaryColor),
-              title: Text("Ambil Foto dari Kamera", style: sMedium.copyWith(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.camera);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: primaryColor),
-              title: Text("Pilih Foto dari Galeri", style: sMedium.copyWith(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -147,92 +183,114 @@ class _QrisPaymentBottomSheetState extends State<QrisPaymentBottomSheet> {
               ),
               const SizedBox(height: spacing3),
 
-              // Area Upload Gambar
-              GestureDetector(
-                onTap: () => _showImageSourceActionSheet(context),
-                child: _imageFile == null
-                    ? CustomPaint(
-                        painter: DashedRectPainter(
-                          color: Colors.white.withOpacity(0.2),
-                          strokeWidth: 1.5,
-                          gap: 4.0,
-                        ),
-                        child: Container(
-                          width: double.infinity,
-                          height: 140,
-                          color: Colors.white.withOpacity(0.02),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.add_a_photo_rounded,
-                                color: Colors.white.withOpacity(0.4),
-                                size: 36,
-                              ),
-                              const SizedBox(height: spacing2),
-                              Text(
-                                "Tambah Foto Bukti TF",
-                                style: sBold.copyWith(color: Colors.white70),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "Ketuk untuk mengambil foto / galeri",
-                                style: xxsRegular.copyWith(color: Colors.white30),
-                              ),
-                            ],
+              // Area Upload Gambar (Aspect Ratio 4:3)
+              AspectRatio(
+                aspectRatio: 4 / 3,
+                child: GestureDetector(
+                  onTap: _isProcessing
+                      ? null
+                      : () => _pickImage(ImageSource.camera),
+                  child: _isProcessing
+                      ? Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.02),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.08),
+                              width: 1.2,
+                            ),
                           ),
-                        ),
-                      )
-                    : Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.1),
-                            width: 1.2,
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: primaryColor,
+                            ),
                           ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Stack(
-                            alignment: Alignment.topRight,
-                            children: [
-                              Image.file(
-                                _imageFile!,
-                                width: double.infinity,
-                                height: 160,
-                                fit: BoxFit.cover,
+                        )
+                      : _imageFile == null
+                          ? CustomPaint(
+                              painter: DashedRectPainter(
+                                color: Colors.white.withOpacity(0.2),
+                                strokeWidth: 1.5,
+                                gap: 4.0,
                               ),
-                              Container(
+                              child: Container(
                                 width: double.infinity,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.black.withOpacity(0.6),
-                                      Colors.transparent,
-                                    ],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                  ),
+                                color: Colors.white.withOpacity(0.02),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.camera_alt_rounded,
+                                      color: Colors.white.withOpacity(0.4),
+                                      size: 36,
+                                    ),
+                                    const SizedBox(height: spacing2),
+                                    Text(
+                                      "Tambah Foto Bukti TF",
+                                      style: sBold.copyWith(color: Colors.white70),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "Ketuk untuk membuka kamera",
+                                      style: xxsRegular.copyWith(
+                                        color: Colors.white30,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.cancel_rounded,
-                                  color: Colors.redAccent,
-                                  size: 24,
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.1),
+                                  width: 1.2,
                                 ),
-                                onPressed: () {
-                                  HapticFeedback.lightImpact();
-                                  setState(() {
-                                    _imageFile = null;
-                                  });
-                                },
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Stack(
+                                  alignment: Alignment.topRight,
+                                  children: [
+                                    Image.file(
+                                      _imageFile!,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      fit: BoxFit.cover,
+                                    ),
+                                    Container(
+                                      width: double.infinity,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.black.withOpacity(0.6),
+                                            Colors.transparent,
+                                          ],
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.cancel_rounded,
+                                        color: Colors.redAccent,
+                                        size: 24,
+                                      ),
+                                      onPressed: () {
+                                        HapticFeedback.lightImpact();
+                                        setState(() {
+                                          _imageFile = null;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                ),
               ),
               const SizedBox(height: spacing6),
 

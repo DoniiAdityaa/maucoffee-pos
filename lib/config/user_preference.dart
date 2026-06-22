@@ -77,7 +77,24 @@ class UserPreference {
   }
 
   void clearData() {
+    // 1. Simpan sementara data penting yang tidak boleh hilang
+    final deviceUuid = prefs.getString("device_uuid");
+    final hasSeenOnboarding = prefs.getBool("has_seen_onboarding");
+    final darkMode = prefs.getBool("dark_mode");
+
+    // 2. Bersihkan seluruh session login
     prefs.clear();
+
+    // 3. Kembalikan data penting ke penyimpanan
+    if (deviceUuid != null) {
+      prefs.setString("device_uuid", deviceUuid);
+    }
+    if (hasSeenOnboarding != null) {
+      prefs.setBool("has_seen_onboarding", hasSeenOnboarding);
+    }
+    if (darkMode != null) {
+      prefs.setBool("dark_mode", darkMode);
+    }
   }
 
   bool isDarkMode() {

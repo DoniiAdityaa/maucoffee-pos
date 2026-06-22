@@ -7,6 +7,9 @@ import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 import 'package:maucoffee/data/history_manager.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
+import 'package:maucoffee/utility/rupiah_formatter.dart';
 
 // Model untuk Bahan Baku
 class IngredientItem {
@@ -59,6 +62,11 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   String _selectedIngredientCategory = "Semua";
   String _selectedProductCategory = "Semua";
 
+  bool get _isAdmin {
+    final userPrefs = serviceLocator<UserPreference>();
+    return userPrefs.getLoginRole() == 'admin';
+  }
+
   final currencyFormatter = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
@@ -75,13 +83,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   ];
 
   // Kategori menu penjualan
-  final List<String> _productCategories = [
-    "Semua",
-    "Coffee",
-    "Non-Coffee",
-    "Pastry",
-    "add on",
-  ];
+  final List<String> _productCategories = ["Semua", "coffee", "tea", "milk"];
 
   // Data Dummy Menu Penjualan
   final List<ProductItem> _products = [
@@ -625,6 +627,470 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     );
   }
 
+  // Dialog tambah menu penjualan baru
+  void _showAddProductDialog() {
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+
+    String selectedCategory =
+        _productCategories[1]; // default Kategori pertama setelah Semua
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: const Color(0xFF2A1A0A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: SingleChildScrollView(
+            child: Container(
+              padding: const EdgeInsets.all(spacing5),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  width: 1.2,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    "Tambah Menu Penjualan Baru",
+                    style: mdBold.copyWith(color: Colors.white),
+                  ),
+                  const Divider(color: Colors.white10, height: 20),
+
+                  // Input Nama Menu
+                  Text(
+                    "Nama Menu",
+                    style: xsBold.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 6),
+                  _customTextField(
+                    nameController,
+                    "Contoh: Es Kopi Susu Gula Aren",
+                  ),
+                  const SizedBox(height: spacing4),
+
+                  // Input Harga Menu
+                  Text(
+                    "Harga (Rp)",
+                    style: xsBold.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 6),
+                  _customTextField(
+                    priceController,
+                    "Contoh: 18.000",
+                    isNumber: true,
+                    inputFormatters: [RupiahInputFormatter()],
+                  ),
+                  const SizedBox(height: spacing5),
+
+                  // Dropdown Kategori
+                  Text(
+                    "Kategori",
+                    style: xsBold.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedCategory,
+                        dropdownColor: const Color(0xFF2A1A0A),
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: primaryColor,
+                        ),
+                        style: sMedium.copyWith(color: Colors.white),
+                        onChanged: (String? val) {
+                          if (val != null) {
+                            setDialogState(() {
+                              selectedCategory = val;
+                            });
+                          }
+                        },
+                        items: _productCategories
+                            .where((cat) => cat != "Semua")
+                            .map<DropdownMenuItem<String>>((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            })
+                            .toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: spacing5),
+
+                  // Button Simpan
+                  ElevatedButton(
+                    onPressed: () {
+                      final name = nameController.text.trim();
+                      final price =
+                          double.tryParse(
+                            priceController.text.replaceAll('.', '').trim(),
+                          ) ??
+                          0;
+                      const stock = 0;
+
+                      if (name.isEmpty) {
+                        CustomFeedback.showError(
+                          context,
+                          "Nama menu tidak boleh kosong!",
+                        );
+                        return;
+                      }
+
+                      if (price <= 0) {
+                        CustomFeedback.showError(
+                          context,
+                          "Harga menu harus lebih besar dari 0!",
+                        );
+                        return;
+                      }
+
+                      final newId = "p${DateTime.now().millisecondsSinceEpoch}";
+                      setState(() {
+                        _products.add(
+                          ProductItem(
+                            id: newId,
+                            name: name,
+                            category: selectedCategory,
+                            price: price,
+                            stock: stock,
+                            isUnlimited: true,
+                          ),
+                        );
+                      });
+
+                      Navigator.pop(context);
+                      HapticFeedback.mediumImpact();
+                      CustomFeedback.showSuccess(
+                        context,
+                        "Menu '$name' berhasil ditambahkan!",
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: spacing3),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      "Simpan Menu",
+                      style: sBold.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Dialog edit menu penjualan
+  void _showEditProductDialog(ProductItem product) {
+    final nameController = TextEditingController(text: product.name);
+    final priceFormatter = NumberFormat.decimalPattern('id');
+    final priceController = TextEditingController(
+      text: priceFormatter.format(product.price),
+    );
+
+    String selectedCategory = _productCategories.contains(product.category)
+        ? product.category
+        : _productCategories[1]; // default jika tidak ditemukan
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: const Color(0xFF2A1A0A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: SingleChildScrollView(
+            child: Container(
+              padding: const EdgeInsets.all(spacing5),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  width: 1.2,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    "Edit Menu Penjualan",
+                    style: mdBold.copyWith(color: Colors.white),
+                  ),
+                  const Divider(color: Colors.white10, height: 20),
+
+                  // Input Nama Menu
+                  Text(
+                    "Nama Menu",
+                    style: xsBold.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 6),
+                  _customTextField(nameController, "Nama Menu"),
+                  const SizedBox(height: spacing4),
+
+                  // Input Harga Menu
+                  Text(
+                    "Harga (Rp)",
+                    style: xsBold.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 6),
+                  _customTextField(
+                    priceController,
+                    "Harga Menu",
+                    isNumber: true,
+                    inputFormatters: [RupiahInputFormatter()],
+                  ),
+                  const SizedBox(height: spacing5),
+
+                  // Dropdown Kategori
+                  Text(
+                    "Kategori",
+                    style: xsBold.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedCategory,
+                        dropdownColor: const Color(0xFF2A1A0A),
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: primaryColor,
+                        ),
+                        style: sMedium.copyWith(color: Colors.white),
+                        onChanged: (String? val) {
+                          if (val != null) {
+                            setDialogState(() {
+                              selectedCategory = val;
+                            });
+                          }
+                        },
+                        items: _productCategories
+                            .where((cat) => cat != "Semua")
+                            .map<DropdownMenuItem<String>>((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            })
+                            .toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: spacing5),
+
+                  // Button Actions
+                  Row(
+                    children: [
+                      // Tombol Simpan Perubahan
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            final name = nameController.text.trim();
+                            final price =
+                                double.tryParse(
+                                  priceController.text
+                                      .replaceAll('.', '')
+                                      .trim(),
+                                ) ??
+                                0;
+                            final stock = product.stock;
+
+                            if (name.isEmpty) {
+                              CustomFeedback.showError(
+                                context,
+                                "Nama menu tidak boleh kosong!",
+                              );
+                              return;
+                            }
+
+                            if (price <= 0) {
+                              CustomFeedback.showError(
+                                context,
+                                "Harga menu harus lebih besar dari 0!",
+                              );
+                              return;
+                            }
+
+                            setState(() {
+                              final index = _products.indexWhere(
+                                (p) => p.id == product.id,
+                              );
+                              if (index != -1) {
+                                _products[index] = ProductItem(
+                                  id: product.id,
+                                  name: name,
+                                  category: selectedCategory,
+                                  price: price,
+                                  stock: stock,
+                                  isUnlimited: product.isUnlimited,
+                                );
+                              }
+                            });
+
+                            Navigator.pop(context);
+                            HapticFeedback.mediumImpact();
+                            CustomFeedback.showSuccess(
+                              context,
+                              "Detail menu berhasil diperbarui!",
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: spacing3,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: Text(
+                            "Simpan",
+                            style: sBold.copyWith(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Dialog konfirmasi hapus menu
+  Future<bool?> _showDeleteProductConfirmation(ProductItem product) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF2A1A0A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(spacing5),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.08),
+              width: 1.2,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "Hapus Menu Penjualan?",
+                style: mdBold.copyWith(color: Colors.white),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "Apakah Anda yakin ingin menghapus '${product.name}' dari katalog penjualan?",
+                style: sMedium.copyWith(color: Colors.white70),
+              ),
+              const SizedBox(height: spacing5),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white30),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: spacing3),
+                      ),
+                      child: Text(
+                        "Batal",
+                        style: sBold.copyWith(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: spacing3),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: spacing3),
+                      ),
+                      child: Text(
+                        "Hapus",
+                        style: sBold.copyWith(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDismissibleBackground() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: spacing3),
+      padding: const EdgeInsets.symmetric(horizontal: spacing5),
+      alignment: Alignment.centerRight,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.transparent, Colors.redAccent.withValues(alpha: 0.2)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text("Hapus", style: sBold.copyWith(color: Colors.redAccent)),
+          const SizedBox(width: spacing3),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -653,10 +1119,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                   GestureDetector(
                     onTap: () {
                       if (_tabController.index == 0) {
-                        CustomFeedback.showInfo(
-                          context,
-                          "Gunakan Dashboard Admin untuk mengedit Menu.",
-                        );
+                        _showAddProductDialog();
                       } else {
                         _showAddIngredientDialog();
                       }
@@ -794,55 +1257,91 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final product = filtered[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: spacing3),
-                      padding: const EdgeInsets.all(spacing4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.02),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.06),
+                    final itemWidget = GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        _showEditProductDialog(product);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: spacing3),
+                        padding: const EdgeInsets.all(spacing4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.02),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.06),
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                product.name,
-                                style: sBold.copyWith(color: Colors.white),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.04),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      product.category,
-                                      style: xxxsMedium.copyWith(
-                                        color: Colors.white60,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.name,
+                                  style: sBold.copyWith(color: Colors.white),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.04),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        product.category,
+                                        style: xxxsMedium.copyWith(
+                                          color: Colors.white60,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          Text(
-                            currencyFormatter.format(product.price),
-                            style: sBold.copyWith(color: primaryColor),
-                          ),
-                        ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  currencyFormatter.format(product.price),
+                                  style: sBold.copyWith(color: primaryColor),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
+                    );
+
+                    return Dismissible(
+                      key: Key(product.id),
+                      direction: _isAdmin
+                          ? DismissDirection.endToStart
+                          : DismissDirection.none,
+                      secondaryBackground: _buildDismissibleBackground(),
+                      background: const SizedBox(),
+                      confirmDismiss: (direction) async {
+                        HapticFeedback.mediumImpact();
+                        final confirm = await _showDeleteProductConfirmation(
+                          product,
+                        );
+                        return confirm ?? false;
+                      },
+                      onDismissed: (direction) {
+                        setState(() {
+                          _products.removeWhere((p) => p.id == product.id);
+                        });
+                        CustomFeedback.showSuccess(
+                          context,
+                          "Menu '${product.name}' berhasil dihapus!",
+                        );
+                      },
+                      child: itemWidget,
                     );
                   },
                 ),
@@ -965,121 +1464,130 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                       statusText = "Menipis";
                     }
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: spacing3),
-                      padding: const EdgeInsets.all(spacing4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.02),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isWarning
-                              ? const Color(0xFFFF9E22).withOpacity(0.2)
-                              : isEmpty
-                              ? Colors.redAccent.withOpacity(0.2)
-                              : Colors.white.withOpacity(0.06),
+                    return GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+
+                        _showRestockDialog(item);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: spacing3),
+                        padding: const EdgeInsets.all(spacing4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.02),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isWarning
+                                ? const Color(0xFFFF9E22).withOpacity(0.2)
+                                : isEmpty
+                                ? Colors.redAccent.withOpacity(0.2)
+                                : Colors.white.withOpacity(0.06),
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.name,
+                                    style: sBold.copyWith(color: Colors.white),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.04),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          item.category,
+                                          style: xxxsMedium.copyWith(
+                                            color: Colors.white60,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        "Batas Minimal: 1 ${item.unit}",
+                                        style: xxsMedium.copyWith(
+                                          color: Colors.white30,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Stock Indicator & Action Button
+                            Row(
                               children: [
-                                Text(
-                                  item.name,
-                                  style: sBold.copyWith(color: Colors.white),
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
+                                    Text(
+                                      "${item.stock.toStringAsFixed(0)} ${item.unit}",
+                                      style: sBold.copyWith(
+                                        color: isEmpty
+                                            ? Colors.redAccent
+                                            : isWarning
+                                            ? const Color(0xFFFF9E22)
+                                            : Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 6,
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.04),
+                                        color: statusColor.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        item.category,
-                                        style: xxxsMedium.copyWith(
-                                          color: Colors.white60,
+                                        border: Border.all(
+                                          color: statusColor.withOpacity(0.2),
+                                          width: 0.8,
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      "Batas Minimal: 1 ${item.unit}",
-                                      style: xxsMedium.copyWith(
-                                        color: Colors.white30,
+                                      child: Text(
+                                        statusText,
+                                        style: xxxsBold.copyWith(
+                                          color: statusColor,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
+                                const SizedBox(width: spacing3),
+                                // Restock Action Button
+                                // IconButton(
+                                //   style: IconButton.styleFrom(
+                                //     backgroundColor: primaryColor.withOpacity(
+                                //       0.1,
+                                //     ),
+                                //     shape: RoundedRectangleBorder(
+                                //       borderRadius: BorderRadius.circular(8),
+                                //     ),
+                                //   ),
+                                //   icon: const Icon(
+                                //     Icons.add_business_rounded,
+                                //     color: primaryColor,
+                                //     size: 18,
+                                //   ),
+                                //   onPressed: () => _showRestockDialog(item),
+                                // ),
                               ],
                             ),
-                          ),
-                          // Stock Indicator & Action Button
-                          Row(
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    "${item.stock.toStringAsFixed(0)} ${item.unit}",
-                                    style: sBold.copyWith(
-                                      color: isEmpty
-                                          ? Colors.redAccent
-                                          : isWarning
-                                          ? const Color(0xFFFF9E22)
-                                          : Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: statusColor.withOpacity(0.2),
-                                        width: 0.8,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      statusText,
-                                      style: xxxsBold.copyWith(
-                                        color: statusColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: spacing3),
-                              // Restock Action Button
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  backgroundColor: primaryColor.withOpacity(
-                                    0.1,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.add_business_rounded,
-                                  color: primaryColor,
-                                  size: 18,
-                                ),
-                                onPressed: () => _showRestockDialog(item),
-                              ),
-                            ],
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -1093,6 +1601,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     TextEditingController controller,
     String hint, {
     bool isNumber = false,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: spacing3),
@@ -1104,9 +1613,9 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
       child: TextField(
         controller: controller,
         keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-        inputFormatters: isNumber
-            ? [FilteringTextInputFormatter.digitsOnly]
-            : null,
+        inputFormatters:
+            inputFormatters ??
+            (isNumber ? [FilteringTextInputFormatter.digitsOnly] : null),
         style: sMedium.copyWith(color: Colors.white),
         decoration: InputDecoration(
           border: InputBorder.none,
