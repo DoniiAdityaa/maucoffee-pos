@@ -1,0 +1,118 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class OfflineStorageService {
+  static const String _queuePrefix = "offline_queue_";
+
+  // ===========================================================================
+  // A. KELOMPOK FITUR: ABSENSI (ATTENDANCE)
+  // ===========================================================================
+
+  // 1. Antrean Clock In (Mulai Shift)
+  Future<void> saveAttendanceStartQueue(Map<String, dynamic> data) async {
+    await _saveToQueue('attendance_start', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getAttendanceStartQueue() async {
+    return await _getQueue('attendance_start');
+  }
+
+  Future<void> removeAttendanceStartQueue(String localId) async {
+    await _removeFromQueue('attendance_start', 'id', localId);
+  }
+
+  // 2. Antrean Clock Out (Selesai Shift)
+  Future<void> saveAttendanceEndQueue(Map<String, dynamic> data) async {
+    await _saveToQueue('attendance_end', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getAttendanceEndQueue() async {
+    return await _getQueue('attendance_end');
+  }
+
+  Future<void> removeAttendanceEndQueue(String shiftId) async {
+    await _removeFromQueue('attendance_end', 'id', shiftId);
+  }
+
+  // ===========================================================================
+  // B. KELOMPOK FITUR: TRANSAKSI / PESANAN (ADD ORDER)
+  // ===========================================================================
+
+  Future<void> saveOrderQueue(Map<String, dynamic> data) async {
+    await _saveToQueue('orders', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getOrderQueue() async {
+    return await _getQueue('orders');
+  }
+
+  Future<void> removeOrderQueue(String localId) async {
+    await _removeFromQueue('orders', 'id', localId);
+  }
+
+  // ===========================================================================
+  // C. KELOMPOK FITUR: KATALOG / STOK BAHAN BAKU (STOCK ADJUSTMENT)
+  // ===========================================================================
+
+  Future<void> saveStockQueue(Map<String, dynamic> data) async {
+    await _saveToQueue('stock_adjustments', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getStockQueue() async {
+    return await _getQueue('stock_adjustments');
+  }
+
+  Future<void> removeStockQueue(String localId) async {
+    await _removeFromQueue('stock_adjustments', 'id', localId);
+  }
+
+  // ===========================================================================
+  // CORE ENGINE / METODE UTAMA (Private Methods)
+  // ===========================================================================
+
+  // Menyimpan JSON ke SharedPreferences
+  Future<void> _saveToQueue(String queueType, Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '$_queuePrefix$queueType';
+
+    final existingList = prefs.getStringList(key) ?? [];
+    existingList.add(json.encode(data));
+    await prefs.setStringList(key, existingList);
+  }
+
+  // Mengambil daftar JSON dari SharedPreferences
+  Future<List<Map<String, dynamic>>> _getQueue(String queueType) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '$_queuePrefix$queueType';
+
+    final list = prefs.getStringList(key) ?? [];
+    return list
+        .map((item) => json.decode(item) as Map<String, dynamic>)
+        .toList();
+  }
+
+  // Menghapus data spesifik dari SharedPreferences berdasarkan key pencocokan
+  Future<void> _removeFromQueue(
+    String queueType,
+    String matchKey,
+    dynamic matchValue,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '$_queuePrefix$queueType';
+
+    final list = prefs.getStringList(key) ?? [];
+    final updatedList = list.where((itemString) {
+      final map = json.decode(itemString) as Map<String, dynamic>;
+      return map[matchKey] != matchValue;
+    }).toList();
+
+    await prefs.setStringList(key, updatedList);
+  }
+
+  // Membersihkan seluruh antrean
+  Future<void> clearQueue(String queueType) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '$_queuePrefix$queueType';
+    await prefs.remove(key);
+  }
+}

@@ -9,7 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/config/env/env.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
-import 'package:maucoffee/home/admin_home_screen.dart';
+import 'package:maucoffee/model/user_model.dart';
+import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/navigation/navigation.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -125,8 +126,30 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
 
       if (response.session != null) {
         final prefs = serviceLocator<UserPreference>();
+        prefs.clearData();
         await prefs.setToken(response.session!.accessToken);
         await prefs.setLoginRole('admin');
+
+        final adminUser = UserModel(
+          id: response.user?.id,
+          name: response.user?.userMetadata?['full_name'] as String? ?? 
+                response.user?.email?.split('@')[0] ?? 
+                "Owner Maucoffee",
+          email: response.user?.email,
+          photo: response.user?.userMetadata?['avatar_url'] as String?,
+        );
+        await prefs.setUser(adminUser);
+
+        try {
+          final employeeRepo = serviceLocator<EmployeeRepository>();
+          await employeeRepo.ensureAdminAsEmployee(
+            adminId: adminUser.id!,
+            name: adminUser.name!,
+            email: adminUser.email,
+          );
+        } catch (e) {
+          debugPrint("Gagal mendaftarkan admin ke employees table: $e");
+        }
 
         if (mounted) {
           Navigator.pushAndRemoveUntil(

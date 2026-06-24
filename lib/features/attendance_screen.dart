@@ -5,11 +5,19 @@ import 'package:intl/intl.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/data/history_manager.dart';
+import 'package:maucoffee/features/cubit/absensi_cubit.dart';
+import 'package:maucoffee/model/absensi_model.dart';
+import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'package:maucoffee/config/notification_manager.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:maucoffee/services/offline_storage_service.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -29,6 +37,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   String _formattedDuration = "00:00:00";
   Timer? _timer;
 
+  // Local stopwatch state only
+
   final dateFormatter = DateFormat('dd MMM yyyy');
   final timeFormatter = DateFormat('HH:mm');
 
@@ -36,8 +46,38 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   void initState() {
     super.initState();
     _loadUserSession();
+    _ensureAdminRegistered();
     _loadActiveShift();
     _initNotifications();
+    _loadHistoryFromSupabase();
+  }
+
+  Future<void> _ensureAdminRegistered() async {
+    if (_isAdmin) {
+      final userPrefs = serviceLocator<UserPreference>();
+      final user = userPrefs.getUser();
+      final adminId = Supabase.instance.client.auth.currentUser?.id;
+      if (adminId != null) {
+        try {
+          final employeeRepo = serviceLocator<EmployeeRepository>();
+          await employeeRepo.ensureAdminAsEmployee(
+            adminId: adminId,
+            name: user.name ?? "Owner Maucoffee",
+            email: user.email,
+          );
+        } catch (e) {
+          debugPrint("Gagal mendaftarkan Admin sebagai Employee record: $e");
+        }
+      }
+    }
+  }
+
+  Future<void> _loadHistoryFromSupabase() async {
+    try {
+      await context.read<AbsensiCubit>().fetchShiftHistory();
+    } catch (e) {
+      debugPrint("Gagal memuat riwayat: $e");
+    }
   }
 
   Future<void> _initNotifications() async {
@@ -137,7 +177,92 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   // Memulai Shift Kerja
   Future<void> _startShift() async {
     HapticFeedback.mediumImpact();
+
+    // Tampilkan loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+        ),
+      ),
+    );
+
     final now = DateTime.now();
+    String? shiftId;
+    final userPrefs = serviceLocator<UserPreference>();
+    final role = userPrefs.getLoginRole();
+
+    String? currentEmployeeId;
+    if (role == 'employee') {
+      currentEmployeeId = userPrefs.getEmployee()?.id;
+    } else if (role == 'admin') {
+      currentEmployeeId = Supabase.instance.client.auth.currentUser?.id;
+    }
+
+    // Cek koneksi internet
+    final results = await Connectivity().checkConnectivity();
+    final isOnline = results.any((r) => r != ConnectivityResult.none);
+
+    if (isOnline) {
+      // PROSES ONLINE
+      if (role == 'admin' && currentEmployeeId != null) {
+        try {
+          final employeeRepo = serviceLocator<EmployeeRepository>();
+          final user = userPrefs.getUser();
+          await employeeRepo.ensureAdminAsEmployee(
+            adminId: currentEmployeeId,
+            name: user.name ?? "Owner Maucoffee",
+            email: user.email,
+          );
+        } catch (e) {
+          debugPrint("Gagal mendaftarkan admin sebelum mulai shift: $e");
+        }
+      }
+
+      if (currentEmployeeId != null) {
+        try {
+          shiftId = await context.read<AbsensiCubit>().startShift(
+            employeeId: currentEmployeeId,
+          );
+        } catch (e) {
+          debugPrint("Gagal mencatat shift di Supabase: $e");
+        }
+      }
+    } else {
+      // PROSES OFFLINE
+      debugPrint(" Mulai shift kerja secara offline...");
+      if (currentEmployeeId != null) {
+        shiftId = "offline-${DateTime.now().millisecondsSinceEpoch}";
+        final offlineData = {
+          'id': shiftId,
+          'employee_id': currentEmployeeId,
+          'clock_in': now.toIso8601String(),
+        };
+        try {
+          await serviceLocator<OfflineStorageService>()
+              .saveAttendanceStartQueue(offlineData);
+        } catch (e) {
+          debugPrint("Gagal menyimpan antrean start offline: $e");
+          shiftId = null;
+        }
+      }
+    }
+
+    if (mounted) {
+      Navigator.pop(context); // Tutup loading dialog
+    }
+
+    if (shiftId == null) {
+      if (mounted) {
+        CustomFeedback.showError(
+          context,
+          "Gagal memulai shift kerja. Pastikan penyimpanan internal Anda mencukupi.",
+        );
+      }
+      return;
+    }
 
     setState(() {
       _startTime = now;
@@ -146,7 +271,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     });
 
     // Simpan ke SharedPreferences secara persisten
-    await HistoryManager().saveActiveShift(_currentUser, _currentRole, now);
+    await HistoryManager().saveActiveShift(
+      _currentUser,
+      _currentRole,
+      now,
+      shiftId,
+    );
     _startTimer();
 
     // Jadwalkan notifikasi pengingat untuk pukul 22:00 malam itu
@@ -172,7 +302,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
 
     if (mounted) {
-      CustomFeedback.showSuccess(context, "Shift kerja berhasil dimulai!");
+      if (isOnline) {
+        CustomFeedback.showSuccess(context, "Shift kerja berhasil dimulai!");
+      } else {
+        CustomFeedback.showWarning(
+          context,
+          "Shift kerja dimulai secara offline! Data disimpan di HP & akan disinkronkan saat ada internet.",
+        );
+      }
     }
   }
 
@@ -290,21 +427,77 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   // Menyelesaikan Shift Kerja
   Future<void> _stopShift(String note) async {
-    final endTime = DateTime.now();
     _timer?.cancel();
 
-    // Buat objek riwayat baru
-    final newAttendance = AttendanceHistory(
-      id: "ATT-${100 + (DateTime.now().millisecond) % 900}",
-      employeeName: _currentUser,
-      role: _currentRole,
-      startTime: _startTime!,
-      endTime: endTime,
-      note: note.isNotEmpty ? note : null,
+    // Tampilkan loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+        ),
+      ),
     );
 
-    // Simpan ke HistoryManager
-    HistoryManager().addAttendance(newAttendance);
+    // Panggil Supabase untuk clock-out jika ada shiftId tersimpan
+    final activeShift = await HistoryManager().getActiveShift();
+    final shiftId = activeShift?["shiftId"];
+    final now = DateTime.now();
+    bool success = false;
+    bool wasOffline = false;
+
+    // Cek koneksi internet
+    final results = await Connectivity().checkConnectivity();
+    final isOnline = results.any((r) => r != ConnectivityResult.none);
+
+    if (shiftId != null) {
+      if (isOnline && !shiftId.startsWith('offline-')) {
+        // PROSES ONLINE
+        try {
+          success = await context.read<AbsensiCubit>().endShift(
+            shiftId: shiftId,
+            note: note.isNotEmpty ? note : null,
+          );
+        } catch (e) {
+          debugPrint("Gagal mengakhiri shift di Supabase: $e");
+        }
+      } else {
+        // PROSES OFFLINE (atau ID mulai-nya kemarin offline)
+        debugPrint("Mengakhiri shift kerja secara offline...");
+        wasOffline = true;
+        final offlineData = {
+          'id': shiftId,
+          'note': note,
+          'clock_out': now.toIso8601String(),
+        };
+        try {
+          await serviceLocator<OfflineStorageService>().saveAttendanceEndQueue(
+            offlineData,
+          );
+          success = true;
+        } catch (e) {
+          debugPrint("Gagal menyimpan antrean end offline: $e");
+        }
+      }
+    } else {
+      debugPrint("Gagal mengakhiri shift: shiftId is null");
+    }
+
+    if (mounted) {
+      Navigator.pop(context); // Tutup loading dialog
+    }
+
+    if (!success) {
+      if (mounted) {
+        CustomFeedback.showError(
+          context,
+          "Gagal mencatat jam selesai. Silakan coba lagi.",
+        );
+      }
+      _startTimer(); // Restart local timer so stopwatch keeps running
+      return;
+    }
 
     // Bersihkan data dari SharedPreferences
     await HistoryManager().clearActiveShift();
@@ -319,16 +512,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     });
 
     if (mounted) {
-      Navigator.pop(context); // Tutup dialog
-      CustomFeedback.showSuccess(
-        context,
-        "Shift kerja berhasil diakhiri & tercatat!",
-      );
+      Navigator.pop(context); // Tutup dialog input note
+      if (!wasOffline) {
+        CustomFeedback.showSuccess(
+          context,
+          "Shift kerja berhasil diakhiri & tercatat!",
+        );
+      } else {
+        CustomFeedback.showWarning(
+          context,
+          "Shift kerja diakhiri secara offline! Data disimpan di HP & akan disinkronkan saat ada internet.",
+        );
+      }
     }
   }
 
   // Menampilkan Dialog Konfirmasi Hapus Riwayat Absensi
-  Future<bool?> _showDeleteConfirmation(AttendanceHistory log) {
+  Future<bool?> _showDeleteConfirmation(AbsensiModel log) {
     HapticFeedback.heavyImpact();
     return showDialog<bool>(
       context: context,
@@ -371,7 +571,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           "Apakah Anda yakin ingin menghapus catatan absensi milik ",
                     ),
                     TextSpan(
-                      text: log.employeeName,
+                      text: log.employeeName ?? "Staf",
                       style: sBold.copyWith(color: primaryColor),
                     ),
                     const TextSpan(
@@ -437,8 +637,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final logs = HistoryManager().attendanceLogs;
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -453,9 +651,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             _buildHistorySectionHeader(),
             const SizedBox(height: spacing3),
             Expanded(
-              child: logs.isEmpty
-                  ? _buildEmptyState()
-                  : _buildHistoryList(logs),
+              child: BlocBuilder<AbsensiCubit, AbsensiState>(
+                builder: (context, state) {
+                  if (state.status == AbsensiStatus.loading &&
+                      state.historyShifts.isEmpty) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                      ),
+                    );
+                  }
+
+                  final historyLogs = state.historyShifts;
+                  if (historyLogs.isEmpty) {
+                    return _buildEmptyState();
+                  }
+
+                  return _buildHistoryList(historyLogs);
+                },
+              ),
             ),
           ],
         ),
@@ -624,7 +838,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildHistoryList(List<AttendanceHistory> logs) {
+  Widget _buildHistoryList(List<AbsensiModel> logs) {
     final admin = _isAdmin;
     return ListView.builder(
       padding: const EdgeInsets.only(
@@ -633,11 +847,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         bottom: 100, // padding agar tidak tertutup floating bar
       ),
       itemCount: logs.length,
-      itemBuilder: (context, index) {
+      itemBuilder: (_, index) {
         final log = logs[index];
 
         return Dismissible(
-          key: Key(log.id),
+          key: Key(log.id ?? 'shift-$index'),
           direction: admin
               ? DismissDirection.endToStart
               : DismissDirection.none,
@@ -647,13 +861,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             final confirm = await _showDeleteConfirmation(log);
             return confirm ?? false;
           },
-          onDismissed: (direction) {
-            HistoryManager().deleteAttendance(log.id);
-            setState(() {});
-            CustomFeedback.showSuccess(
-              context,
-              "Riwayat absensi ${log.employeeName} berhasil dihapus!",
-            );
+          onDismissed: (direction) async {
+            if (log.id != null) {
+              try {
+                await context.read<AbsensiCubit>().deleteShift(
+                  shiftId: log.id!,
+                );
+                if (!mounted) return;
+                CustomFeedback.showSuccess(
+                  context,
+                  "Riwayat absensi ${log.employeeName ?? 'Staf'} berhasil dihapus!",
+                );
+              } catch (e) {
+                if (!mounted) return;
+                CustomFeedback.showError(
+                  context,
+                  "Gagal menghapus riwayat: $e",
+                );
+              }
+            }
           },
           child: _buildHistoryItem(log),
         );
@@ -684,8 +910,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildHistoryItem(AttendanceHistory log) {
-    final duration = log.endTime.difference(log.startTime);
+  Widget _buildHistoryItem(AbsensiModel log) {
+    final endTime = log.clockOut ?? log.clockIn;
+    final duration = endTime.difference(log.clockIn);
 
     return Container(
       margin: const EdgeInsets.only(bottom: spacing3),
@@ -693,7 +920,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.02),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(
+          color: log.isSynced
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFFF9E22).withValues(alpha: 0.3),
+          width: log.isSynced ? 1.0 : 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -704,7 +936,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               Row(
                 children: [
                   Text(
-                    log.employeeName,
+                    log.employeeName ?? "Staf",
                     style: sBold.copyWith(color: Colors.white),
                   ),
                   const SizedBox(width: 8),
@@ -718,14 +950,48 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      log.role,
+                      log.employeeRole ?? "Staf",
                       style: xxxsMedium.copyWith(color: Colors.white60),
                     ),
                   ),
+                  if (!log.isSynced) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF9E22).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: const Color(0xFFFF9E22).withValues(alpha: 0.3),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.cloud_off_rounded,
+                            color: Color(0xFFFF9E22),
+                            size: 10,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Belum Sinkron",
+                            style: xxsBold.copyWith(
+                              color: const Color(0xFFFF9E22),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
               Text(
-                dateFormatter.format(log.startTime),
+                dateFormatter.format(log.clockIn),
                 style: xxsRegular.copyWith(color: Colors.white38),
               ),
             ],
@@ -735,7 +1001,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Jam Kerja: ${timeFormatter.format(log.startTime)} - ${timeFormatter.format(log.endTime)}",
+                "Jam Kerja: ${timeFormatter.format(log.clockIn.toLocal())} - ${timeFormatter.format(endTime.toLocal())}",
                 style: xxsMedium.copyWith(color: Colors.white54),
               ),
               Text(
@@ -744,7 +1010,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
             ],
           ),
-          if (log.note != null) ...[
+          if (log.note != null && log.note!.isNotEmpty) ...[
             const SizedBox(height: 8),
             const Divider(color: Colors.white10, height: 1),
             const SizedBox(height: 8),

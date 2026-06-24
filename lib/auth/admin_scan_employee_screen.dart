@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -483,7 +484,12 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
           ),
         ),
       ),
-    );
+    ).then((_) {
+      if (!_isProcessed) {
+        _controller.start();
+        _scanLineController.repeat(reverse: true);
+      }
+    });
   }
 
   @override
@@ -944,6 +950,16 @@ class QrScannerOverlayShape extends ShapeBorder {
       glowPaint,
     );
 
+    // Subtle guide border
+    final guidePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.08)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(cutoutRect, Radius.circular(borderRadius)),
+      guidePaint,
+    );
+
     // Corner brackets
     final borderPaint = Paint()
       ..color = borderColor
@@ -961,14 +977,19 @@ class QrScannerOverlayShape extends ShapeBorder {
     final b = cy + hs;
     final br = borderRadius;
     final bl = borderLength;
+    const double pi = math.pi;
 
     // Top-left
     canvas.drawPath(
       Path()
         ..moveTo(l + br + bl, t)
         ..lineTo(l + br, t)
-        ..arcToPoint(Offset(l, t + br),
-            radius: Radius.circular(br))
+        ..arcTo(
+          Rect.fromCircle(center: Offset(l + br, t + br), radius: br),
+          -pi / 2,
+          -pi / 2,
+          false,
+        )
         ..lineTo(l, t + br + bl),
       borderPaint,
     );
@@ -977,8 +998,12 @@ class QrScannerOverlayShape extends ShapeBorder {
       Path()
         ..moveTo(r - br - bl, t)
         ..lineTo(r - br, t)
-        ..arcToPoint(Offset(r, t + br),
-            radius: Radius.circular(br), clockwise: true)
+        ..arcTo(
+          Rect.fromCircle(center: Offset(r - br, t + br), radius: br),
+          -pi / 2,
+          pi / 2,
+          false,
+        )
         ..lineTo(r, t + br + bl),
       borderPaint,
     );
@@ -987,8 +1012,12 @@ class QrScannerOverlayShape extends ShapeBorder {
       Path()
         ..moveTo(l, b - br - bl)
         ..lineTo(l, b - br)
-        ..arcToPoint(Offset(l + br, b),
-            radius: Radius.circular(br))
+        ..arcTo(
+          Rect.fromCircle(center: Offset(l + br, b - br), radius: br),
+          pi,
+          -pi / 2,
+          false,
+        )
         ..lineTo(l + br + bl, b),
       borderPaint,
     );
@@ -997,8 +1026,12 @@ class QrScannerOverlayShape extends ShapeBorder {
       Path()
         ..moveTo(r, b - br - bl)
         ..lineTo(r, b - br)
-        ..arcToPoint(Offset(r - br, b),
-            radius: Radius.circular(br), clockwise: false)
+        ..arcTo(
+          Rect.fromCircle(center: Offset(r - br, b - br), radius: br),
+          0,
+          pi / 2,
+          false,
+        )
         ..lineTo(r - br - bl, b),
       borderPaint,
     );

@@ -5,7 +5,6 @@ import 'package:maucoffee/auth/admin_login_screen.dart';
 import 'package:maucoffee/auth/employee_register_qr_screen.dart';
 
 // Import Design System kita
-import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 

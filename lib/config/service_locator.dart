@@ -9,6 +9,9 @@ import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/repository/expense_repository.dart';
 import 'package:maucoffee/repository/order_repository.dart';
 import 'package:maucoffee/repository/product_repository.dart';
+import 'package:maucoffee/repository/absensi_repository.dart';
+import 'package:maucoffee/services/offline_storage_service.dart';
+import 'package:maucoffee/features/cubit/absensi_cubit.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -64,5 +67,14 @@ Future<void> setUpLocator() async {
   );
   serviceLocator.registerLazySingleton<OrderRepository>(
     () => OrderRepository(),
+  );
+  serviceLocator.registerLazySingleton<AbsensiRepository>(
+    () => AbsensiRepository(),
+  );
+  serviceLocator.registerLazySingleton<OfflineStorageService>(
+    () => OfflineStorageService(),
+  );
+  serviceLocator.registerLazySingleton<AbsensiCubit>(
+    () => AbsensiCubit(serviceLocator<AbsensiRepository>()),
   );
 }

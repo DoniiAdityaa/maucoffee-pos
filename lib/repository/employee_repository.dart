@@ -64,4 +64,29 @@ class EmployeeRepository {
       throw Exception('Gagal mengubah data karyawan: $e');
     }
   }
+
+  // Memastikan admin terdaftar sebagai employee record
+  Future<void> ensureAdminAsEmployee({
+    required String adminId,
+    required String name,
+    String? email,
+  }) async {
+    try {
+      final existing = await getEmployeeById(adminId);
+      if (existing == null) {
+        final adminEmp = EmployeeModel(
+          id: adminId,
+          adminId: adminId,
+          name: name,
+          role: 'Admin',
+          email: email,
+          isActive: true,
+        );
+        await addEmployee(adminEmp);
+      }
+    } catch (e) {
+      // Abaikan error agar tidak menghalangi login
+      print("Gagal mendaftarkan Admin sebagai Employee record: $e");
+    }
+  }
 }

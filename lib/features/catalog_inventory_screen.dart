@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -38,6 +40,7 @@ class ProductItem {
   final double price;
   int stock;
   final bool isUnlimited;
+  final String? imagePath;
 
   ProductItem({
     required this.id,
@@ -46,6 +49,7 @@ class ProductItem {
     required this.price,
     required this.stock,
     this.isUnlimited = false,
+    this.imagePath,
   });
 }
 
@@ -634,6 +638,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
 
     String selectedCategory =
         _productCategories[1]; // default Kategori pertama setelah Semua
+    String? selectedImagePath;
 
     showDialog(
       context: context,
@@ -734,6 +739,17 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                   ),
                   const SizedBox(height: spacing5),
 
+                  // Image Upload Field
+                  _buildImageUploadField(
+                    context: context,
+                    currentImagePath: selectedImagePath,
+                    onImagePicked: (path) {
+                      selectedImagePath = path;
+                    },
+                    setDialogState: setDialogState,
+                  ),
+                  const SizedBox(height: spacing6),
+
                   // Button Simpan
                   ElevatedButton(
                     onPressed: () {
@@ -771,6 +787,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                             price: price,
                             stock: stock,
                             isUnlimited: true,
+                            imagePath: selectedImagePath,
                           ),
                         );
                       });
@@ -814,6 +831,8 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     String selectedCategory = _productCategories.contains(product.category)
         ? product.category
         : _productCategories[1]; // default jika tidak ditemukan
+
+    String? selectedImagePath = product.imagePath;
 
     showDialog(
       context: context,
@@ -911,6 +930,17 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                   ),
                   const SizedBox(height: spacing5),
 
+                  // Image Upload Field
+                  _buildImageUploadField(
+                    context: context,
+                    currentImagePath: selectedImagePath,
+                    onImagePicked: (path) {
+                      selectedImagePath = path;
+                    },
+                    setDialogState: setDialogState,
+                  ),
+                  const SizedBox(height: spacing6),
+
                   // Button Actions
                   Row(
                     children: [
@@ -957,6 +987,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                                   price: price,
                                   stock: stock,
                                   isUnlimited: product.isUnlimited,
+                                  imagePath: selectedImagePath,
                                 );
                               }
                             });
@@ -1273,45 +1304,76 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                           ),
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  product.name,
-                                  style: sBold.copyWith(color: Colors.white),
+                            // Kotakan Gambar Produk
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.04),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.08),
                                 ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.04),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        product.category,
-                                        style: xxxsMedium.copyWith(
-                                          color: Colors.white60,
+                              ),
+                              child: product.imagePath != null && product.imagePath!.isNotEmpty
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.file(
+                                        File(product.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) => Icon(
+                                          Icons.coffee_rounded,
+                                          color: primaryColor.withOpacity(0.6),
+                                          size: 24,
                                         ),
                                       ),
+                                    )
+                                  : Icon(
+                                      Icons.coffee_rounded,
+                                      color: primaryColor.withOpacity(0.6),
+                                      size: 24,
                                     ),
-                                  ],
-                                ),
-                              ],
                             ),
-                            Row(
-                              children: [
-                                Text(
-                                  currencyFormatter.format(product.price),
-                                  style: sBold.copyWith(color: primaryColor),
-                                ),
-                              ],
+                            const SizedBox(width: spacing4),
+                            // Informasi Produk
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    product.name,
+                                    style: sBold.copyWith(color: Colors.white),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.04),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          product.category,
+                                          style: xxxsMedium.copyWith(
+                                            color: Colors.white60,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: spacing2),
+                            // Harga Produk
+                            Text(
+                              currencyFormatter.format(product.price),
+                              style: sBold.copyWith(color: primaryColor),
                             ),
                           ],
                         ),
@@ -1667,6 +1729,145 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
           Text(text, style: sMedium.copyWith(color: Colors.white30)),
         ],
       ),
+    );
+  }
+
+  Widget _buildImageUploadField({
+    required BuildContext context,
+    required String? currentImagePath,
+    required Function(String?) onImagePicked,
+    required StateSetter setDialogState,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Foto Produk",
+          style: xsBold.copyWith(color: Colors.white70),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            final ImagePicker picker = ImagePicker();
+            HapticFeedback.lightImpact();
+
+            final source = await showModalBottomSheet<ImageSource>(
+              context: context,
+              backgroundColor: const Color(0xFF2A1A0A),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (context) => Container(
+                padding: const EdgeInsets.all(spacing5),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "Pilih Sumber Foto",
+                      style: mdBold.copyWith(color: Colors.white),
+                    ),
+                    const SizedBox(height: spacing4),
+                    ListTile(
+                      leading: const Icon(Icons.camera_alt_rounded, color: primaryColor),
+                      title: Text("Kamera", style: sMedium.copyWith(color: Colors.white)),
+                      onTap: () => Navigator.pop(context, ImageSource.camera),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.photo_library_rounded, color: primaryColor),
+                      title: Text("Galeri", style: sMedium.copyWith(color: Colors.white)),
+                      onTap: () => Navigator.pop(context, ImageSource.gallery),
+                    ),
+                  ],
+                ),
+              ),
+            );
+
+            if (source != null) {
+              try {
+                final XFile? pickedFile = await picker.pickImage(
+                  source: source,
+                  imageQuality: 80,
+                  maxWidth: 800,
+                  maxHeight: 800,
+                );
+                if (pickedFile != null) {
+                  setDialogState(() {
+                    onImagePicked(pickedFile.path);
+                  });
+                }
+              } catch (e) {
+                debugPrint("Error picking image: $e");
+              }
+            }
+          },
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.08),
+                style: BorderStyle.solid,
+              ),
+            ),
+            child: currentImagePath != null && currentImagePath.isNotEmpty
+                ? Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(currentImagePath),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            setDialogState(() {
+                              onImagePicked(null);
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.black54,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: primaryColor.withOpacity(0.6),
+                          size: 32,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Unggah Foto Produk",
+                          style: xsMedium.copyWith(color: Colors.white38),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }

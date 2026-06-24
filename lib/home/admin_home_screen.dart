@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:maucoffee/auth/admin_scan_employee_screen.dart';
 import 'package:maucoffee/auth/role_selector_screen.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
+import 'package:maucoffee/features/cubit/absensi_cubit.dart';
+import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
@@ -27,35 +30,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   // locked staff
   final bool isLocked = true;
 
-  // Store status state
-  bool _isStoreOpen = false;
-  DateTime? _storeOpenTime;
-  Duration _storeDuration = Duration.zero;
-  Timer? _storeTimer;
-
   final currencyFormatter = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
     decimalDigits: 0,
   );
 
-  // Active Staff Shift Tracker Mock (using Cashier role)
-  final List<Map<String, dynamic>> _activeStaffShift = [
-    {
-      'id': '1',
-      'name': 'Ahmad Dani',
-      'role': 'Cashier',
-      'clockIn': '08:00 AM',
-      'avatarColor': const Color(0xFFE27D00),
-    },
-    {
-      'id': '2',
-      'name': 'Siti Rahma',
-      'role': 'Cashier',
-      'clockIn': '09:15 AM',
-      'avatarColor': const Color(0xFF2D8A4E),
-    },
-  ];
+  final timeFormatter = DateFormat('HH:mm');
 
   // Best Selling Items Mock
   final List<Map<String, dynamic>> _bestSellers = [
@@ -153,53 +134,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   @override
   void dispose() {
-    _storeTimer?.cancel();
     super.dispose();
-  }
-
-  // Toggle Store Status & Timer
-  void _toggleStoreStatus() {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _isStoreOpen = !_isStoreOpen;
-      if (_isStoreOpen) {
-        _storeOpenTime = DateTime.now();
-        _storeDuration = Duration.zero;
-        _storeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (mounted) {
-            setState(() {
-              _storeDuration = DateTime.now().difference(_storeOpenTime!);
-            });
-          }
-        });
-      } else {
-        _storeTimer?.cancel();
-        _storeTimer = null;
-        _storeOpenTime = null;
-        _storeDuration = Duration.zero;
-      }
-    });
-  }
-
-  // Delete Staff Shift History (Admin specific control)
-  void _deleteStaffShift(String id, String name) {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _activeStaffShift.removeWhere((staff) => staff['id'] == id);
-    });
-    CustomFeedback.showSuccess(
-      context,
-      "Catatan shift $name berhasil dihapus.",
-    );
-  }
-
-  // Helper duration formatter (HH:MM:SS)
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = twoDigits(duration.inHours);
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return "$hours:$minutes:$seconds";
   }
 
   // Handle Logout Confirmation
@@ -361,31 +296,39 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 _buildHeader(context),
                 const SizedBox(height: spacing7),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.only(
-                      left: spacing6,
-                      right: spacing6,
-                      bottom: bottomPadding + 110,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildWelcomeHeader(),
-                        const SizedBox(height: spacing7),
-                        _buildStatsAndStoreRow(context),
-                        const SizedBox(height: spacing8),
-                        _buildWeeklyChartSection(),
-                        const SizedBox(height: spacing8),
-                        if (_isAdmin) ...[
-                          _buildActiveStaffShiftSection(),
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      await context.read<AbsensiCubit>().fetchActiveShifts();
+                    },
+                    color: primaryColor,
+                    backgroundColor: const Color(0xFF2A1A0A),
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.only(
+                        left: spacing6,
+                        right: spacing6,
+                        bottom: bottomPadding + 110,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildWelcomeHeader(),
+                          const SizedBox(height: spacing7),
+                          _buildStatsAndStoreRow(context),
                           const SizedBox(height: spacing8),
+                          _buildWeeklyChartSection(),
+                          const SizedBox(height: spacing8),
+                          if (_isAdmin) ...[
+                            _buildActiveStaffShiftSection(context),
+                            const SizedBox(height: spacing8),
+                          ],
+                          _buildBestSellersSection(),
+                          const SizedBox(height: spacing8),
+                          _buildLowStockSection(),
+                          const SizedBox(height: spacing8),
+                          _buildRecentTransactionsSection(),
                         ],
-                        _buildBestSellersSection(),
-                        const SizedBox(height: spacing8),
-                        _buildLowStockSection(),
-                        const SizedBox(height: spacing8),
-                        _buildRecentTransactionsSection(),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -555,13 +498,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 
   Widget _buildStatsAndStoreRow(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _buildTodaySalesCard()),
-        const SizedBox(width: spacing4),
-        Expanded(child: _buildStoreStatusCard()),
-      ],
-    );
+    return _buildTodaySalesCard();
   }
 
   Widget _buildTodaySalesCard() {
@@ -626,126 +563,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildStoreStatusCard() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          height: 116,
-          padding: const EdgeInsets.all(spacing4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: _isStoreOpen
-                  ? [
-                      const Color(0xFF2D8A4E).withValues(alpha: 0.12),
-                      const Color(0xFF2D8A4E).withValues(alpha: 0.03),
-                    ]
-                  : [
-                      Colors.white.withValues(alpha: 0.08),
-                      Colors.white.withValues(alpha: 0.03),
-                    ],
-            ),
-            border: Border.all(
-              color: _isStoreOpen
-                  ? const Color(0xFF2D8A4E).withValues(alpha: 0.3)
-                  : Colors.white.withValues(alpha: 0.08),
-              width: 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Status Toko",
-                    style: xxsMedium.copyWith(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  _isStoreOpen
-                      ? _buildPulseIndicator()
-                      : Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white38,
-                          ),
-                        ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isStoreOpen ? _formatDuration(_storeDuration) : "TUTUP",
-                    style: lgBold.copyWith(
-                      color: _isStoreOpen
-                          ? const Color(0xFF2D8A4E)
-                          : Colors.white60,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  GestureDetector(
-                    onTap: _toggleStoreStatus,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: _isStoreOpen
-                            ? const Color(0xFFFF6B6B).withValues(alpha: 0.15)
-                            : const Color(0xFFE27D00).withValues(alpha: 0.15),
-                        border: Border.all(
-                          color: _isStoreOpen
-                              ? const Color(0xFFFF6B6B).withValues(alpha: 0.3)
-                              : const Color(0xFFE27D00).withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Text(
-                        _isStoreOpen ? "Tutup Toko" : "Buka Toko",
-                        style: xxxsBold.copyWith(
-                          color: _isStoreOpen
-                              ? const Color(0xFFFF8A8A)
-                              : const Color(0xFFFF9E22),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPulseIndicator() {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color(0xFF2D8A4E),
-        boxShadow: [
-          BoxShadow(color: Color(0xFF2D8A4E), blurRadius: 6, spreadRadius: 1),
-        ],
       ),
     );
   }
@@ -850,7 +667,66 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  Widget _buildActiveStaffShiftSection() {
+  Color _getRoleColor(String? role) {
+    switch (role?.toLowerCase()) {
+      case 'cashier':
+      case 'kasir':
+        return const Color(0xFFE27D00);
+      case 'admin':
+      case 'owner':
+        return const Color(0xFF3B82F6);
+      default:
+        return const Color(0xFFE27D00); // Default to orange
+    }
+  }
+
+  void _deleteStaffShiftDialog(
+    BuildContext context,
+    String shiftId,
+    String staffName,
+  ) {
+    HapticFeedback.mediumImpact();
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF2A1A0A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          "Hapus Catatan Shift?",
+          style: mdBold.copyWith(color: Colors.white),
+        ),
+        content: Text(
+          "Anda akan menghapus paksa catatan shift kerja aktif untuk $staffName. Aksi ini tidak dapat dibatalkan.",
+          style: sRegular.copyWith(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text(
+              "Batal",
+              style: sMedium.copyWith(color: Colors.white38),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              context.read<AbsensiCubit>().deleteShift(shiftId: shiftId);
+              CustomFeedback.showSuccess(
+                context,
+                "Catatan shift $staffName berhasil dihapus.",
+              );
+            },
+            child: Text(
+              "Hapus",
+              style: sBold.copyWith(color: const Color(0xFFFF6B6B)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveStaffShiftSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -879,8 +755,46 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   width: 1,
                 ),
               ),
-              child: _activeStaffShift.isEmpty
-                  ? Padding(
+              child: BlocBuilder<AbsensiCubit, AbsensiState>(
+                builder: (context, state) {
+                  if (state.status == AbsensiStatus.loading &&
+                      state.activeShifts.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: spacing5),
+                      child: Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              primaryColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (state.status == AbsensiStatus.error) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: spacing5),
+                      child: Center(
+                        child: Text(
+                          "Gagal memuat data: ${state.errorMessage}",
+                          style: sRegular.copyWith(
+                            color: const Color(0xFFFF6B6B),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+
+                  final activeShifts = state.activeShifts;
+
+                  if (activeShifts.isEmpty) {
+                    return Padding(
                       padding: const EdgeInsets.symmetric(vertical: spacing5),
                       child: Center(
                         child: Text(
@@ -888,66 +802,67 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           style: sRegular.copyWith(color: Colors.white38),
                         ),
                       ),
-                    )
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _activeStaffShift.length,
-                      separatorBuilder: (context, index) => Divider(
-                        color: Colors.white.withValues(alpha: 0.05),
-                        height: 1,
-                      ),
-                      itemBuilder: (context, index) {
-                        final staff = _activeStaffShift[index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: spacing3,
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: staff['avatarColor'].withValues(
-                                    alpha: 0.15,
-                                  ),
-                                  border: Border.all(
-                                    color: staff['avatarColor'].withValues(
-                                      alpha: 0.4,
-                                    ),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.person_outline_rounded,
-                                  color: staff['avatarColor'],
-                                  size: 18,
+                    );
+                  }
+
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: activeShifts.length,
+                    separatorBuilder: (context, index) => Divider(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      height: 1,
+                    ),
+                    itemBuilder: (context, index) {
+                      final shift = activeShifts[index];
+                      final roleColor = _getRoleColor(shift.employeeRole);
+                      final formattedTime = timeFormatter.format(
+                        shift.clockIn.toLocal(),
+                      );
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: spacing3),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: roleColor.withValues(alpha: 0.15),
+                                border: Border.all(
+                                  color: roleColor.withValues(alpha: 0.4),
+                                  width: 1,
                                 ),
                               ),
-                              const SizedBox(width: spacing4),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      staff['name'],
-                                      style: smBold.copyWith(
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      "${staff['role']} • Masuk jam ${staff['clockIn']}",
-                                      style: xxsRegular.copyWith(
-                                        color: Colors.white38,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              child: Icon(
+                                Icons.person_outline_rounded,
+                                color: roleColor,
+                                size: 18,
                               ),
-                              // Delete shift history record button (Admin control)
+                            ),
+                            const SizedBox(width: spacing4),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    shift.employeeName ?? "Staf",
+                                    style: smBold.copyWith(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "${shift.employeeRole ?? 'Kasir'} • Masuk jam $formattedTime",
+                                    style: xxsRegular.copyWith(
+                                      color: Colors.white38,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (shift.id != null)
                               IconButton(
                                 icon: Icon(
                                   Icons.delete_outline_rounded,
@@ -956,17 +871,22 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                   ).withValues(alpha: 0.6),
                                   size: 20,
                                 ),
-                                onPressed: () => _deleteStaffShift(
-                                  staff['id'],
-                                  staff['name'],
-                                ),
+                                onPressed: () {
+                                  _deleteStaffShiftDialog(
+                                    context,
+                                    shift.id!,
+                                    shift.employeeName ?? "Staf",
+                                  );
+                                },
                                 tooltip: "Hapus Catatan Shift",
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ),
