@@ -8,11 +8,15 @@ class AbsensiRepository {
 
   // Mengambil shift aktif (clock_out is null) milik admin/owner saat ini
   Future<List<AbsensiModel>> getActiveShifts() async {
+    final adminId = _client.auth.currentUser?.id;
+    if (adminId == null || adminId.isEmpty) {
+      return [];
+    }
     try {
       final response = await _client
           .from('shifts')
           .select('*, employees!inner(*)')
-          .eq('employees.admin_id', _client.auth.currentUser?.id ?? '')
+          .eq('employees.admin_id', adminId)
           .isFilter('clock_out', null);
 
       return (response as List)
@@ -32,10 +36,14 @@ class AbsensiRepository {
       var query = _client.from('shifts').select('*, employees!inner(*)');
 
       if (role == 'admin') {
+        final adminId = _client.auth.currentUser?.id;
+        if (adminId == null || adminId.isEmpty) {
+          return [];
+        }
         // Jika admin, ambil semua shift milik karyawannya
         query = query.eq(
           'employees.admin_id',
-          _client.auth.currentUser?.id ?? '',
+          adminId,
         );
       } else {
         // Jika karyawan, ambil hanya shift miliknya sendiri

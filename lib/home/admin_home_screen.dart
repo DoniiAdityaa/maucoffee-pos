@@ -13,6 +13,7 @@ import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
+import 'package:maucoffee/home/staff_list/admin_staff_management_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -419,6 +420,43 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   context,
                   PageRouteBuilder(
                     pageBuilder: (context, animation, secondaryAnimation) =>
+                        const AdminStaffManagementScreen(),
+                    transitionDuration: const Duration(milliseconds: 400),
+                    transitionsBuilder:
+                        (context, animation, secondaryAnimation, child) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          );
+                        },
+                  ),
+                );
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.06),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.people_alt_rounded,
+                  color: Color(0xFFE27D00),
+                  size: 18,
+                ),
+              ),
+            ),
+            const SizedBox(width: spacing3),
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
                         const AdminScanEmployeeScreen(),
                     transitionDuration: const Duration(milliseconds: 400),
                     transitionsBuilder:
@@ -730,12 +768,17 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "SHIFT STAF AKTIF",
-          style: xsBold.copyWith(
-            color: Colors.white.withValues(alpha: 0.3),
-            letterSpacing: 1.2,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "SHIFT STAF AKTIF",
+              style: xsBold.copyWith(
+                color: Colors.white.withValues(alpha: 0.3),
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: spacing4),
         ClipRRect(
@@ -805,16 +848,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     );
                   }
 
+                  final displayedShifts = activeShifts.take(3).toList();
+
                   return ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: activeShifts.length,
+                    itemCount: displayedShifts.length,
                     separatorBuilder: (context, index) => Divider(
                       color: Colors.white.withValues(alpha: 0.05),
                       height: 1,
                     ),
                     itemBuilder: (context, index) {
-                      final shift = activeShifts[index];
+                      final shift = displayedShifts[index];
                       final roleColor = _getRoleColor(shift.employeeRole);
                       final formattedTime = timeFormatter.format(
                         shift.clockIn.toLocal(),

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:maucoffee/home/cubit/employee_cubit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/config/env/env.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:maucoffee/features/cubit/absensi_cubit.dart';
-import 'package:maucoffee/repository/absensi_repository.dart';
 import 'package:maucoffee/auth/role_selector_screen.dart';
 import 'package:maucoffee/navigation/navigation.dart';
 
@@ -51,9 +51,12 @@ class MyApp extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider(
-          create: (context) => AbsensiCubit(serviceLocator<AbsensiRepository>())
+          create: (_) => serviceLocator<AbsensiCubit>()
             ..fetchActiveShifts()
             ..fetchShiftHistory(),
+        ),
+        BlocProvider(
+          create: (_) => serviceLocator<EmployeeCubit>()..fetchEmployees(),
         ),
       ],
       child: MaterialApp(

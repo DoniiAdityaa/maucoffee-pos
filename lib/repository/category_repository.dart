@@ -6,8 +6,11 @@ class CategoryRepository {
 
   // Mengambil kategori berdasarkan ID Admin
   Future<List<CategoryModel>> getCategories({String? adminId}) async {
+    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    if (targetAdminId == null || targetAdminId.isEmpty) {
+      return [];
+    }
     try {
-      final targetAdminId = adminId ?? _client.auth.currentUser?.id ?? '';
       final response = await _client
           .from('categories')
           .select()

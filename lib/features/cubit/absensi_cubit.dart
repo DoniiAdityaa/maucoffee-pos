@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:maucoffee/model/absensi_model.dart';
@@ -5,13 +6,26 @@ import 'package:maucoffee/repository/absensi_repository.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/services/offline_storage_service.dart';
+import 'package:maucoffee/services/sync_manager.dart';
 
 part 'absensi_state.dart';
 
 class AbsensiCubit extends Cubit<AbsensiState> {
   final AbsensiRepository _absensiRepository;
+  StreamSubscription? _syncSubscription;
 
-  AbsensiCubit(this._absensiRepository) : super(const AbsensiState());
+  AbsensiCubit(this._absensiRepository) : super(const AbsensiState()) {
+    _syncSubscription = SyncManager().onSyncCompleted.listen((_) {
+      fetchActiveShifts();
+      fetchShiftHistory();
+    });
+  }
+
+  @override
+  Future<void> close() {
+    _syncSubscription?.cancel();
+    return super.close();
+  }
 
   // Memuat data shift aktif dari database (untuk Admin Dashboard)
   Future<void> fetchActiveShifts() async {

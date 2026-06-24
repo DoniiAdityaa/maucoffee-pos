@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/data/api/api_service.dart';
+import 'package:maucoffee/home/cubit/employee_cubit.dart';
 import 'package:maucoffee/repository/category_repository.dart';
 import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/repository/expense_repository.dart';
@@ -52,29 +53,32 @@ Future<void> setUpLocator() async {
   PackageInfo packageInfo = await PackageInfo.fromPlatform();
   serviceLocator.registerSingleton<PackageInfo>(packageInfo);
 
-  // Daftarkan semua Repository ke Service Locator
-  serviceLocator.registerLazySingleton<CategoryRepository>(
+  // Daftarkan semua Repository ke Service Locator sebagai Factory
+  serviceLocator.registerFactory<CategoryRepository>(
     () => CategoryRepository(),
   );
-  serviceLocator.registerLazySingleton<ProductRepository>(
+  serviceLocator.registerFactory<ProductRepository>(
     () => ProductRepository(),
   );
-  serviceLocator.registerLazySingleton<EmployeeRepository>(
+  serviceLocator.registerFactory<EmployeeRepository>(
     () => EmployeeRepository(),
   );
-  serviceLocator.registerLazySingleton<ExpenseRepository>(
+  serviceLocator.registerFactory<ExpenseRepository>(
     () => ExpenseRepository(),
   );
-  serviceLocator.registerLazySingleton<OrderRepository>(
+  serviceLocator.registerFactory<OrderRepository>(
     () => OrderRepository(),
   );
-  serviceLocator.registerLazySingleton<AbsensiRepository>(
+  serviceLocator.registerFactory<AbsensiRepository>(
     () => AbsensiRepository(),
   );
-  serviceLocator.registerLazySingleton<OfflineStorageService>(
+  serviceLocator.registerFactory<OfflineStorageService>(
     () => OfflineStorageService(),
   );
-  serviceLocator.registerLazySingleton<AbsensiCubit>(
+  serviceLocator.registerFactory<AbsensiCubit>(
     () => AbsensiCubit(serviceLocator<AbsensiRepository>()),
+  );
+  serviceLocator.registerFactory<EmployeeCubit>(
+    () => EmployeeCubit(serviceLocator<EmployeeRepository>()),
   );
 }

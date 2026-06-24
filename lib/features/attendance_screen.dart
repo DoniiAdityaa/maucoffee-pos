@@ -80,6 +80,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
+  Future<void> _handleRefresh() async {
+    _loadUserSession();
+    await _loadActiveShift();
+    await _loadHistoryFromSupabase();
+  }
+
   Future<void> _initNotifications() async {
     await NotificationManager.getInstance().init();
   }
@@ -256,9 +262,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     if (shiftId == null) {
       if (mounted) {
+        final errorMsg = context.read<AbsensiCubit>().state.errorMessage;
         CustomFeedback.showError(
           context,
-          "Gagal memulai shift kerja. Pastikan penyimpanan internal Anda mencukupi.",
+          errorMsg != null && errorMsg.isNotEmpty
+              ? "Gagal memulai shift: $errorMsg"
+              : "Gagal memulai shift kerja. Pastikan penyimpanan internal Anda mencukupi.",
         );
       }
       return;
@@ -490,9 +499,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     if (!success) {
       if (mounted) {
+        final errorMsg = context.read<AbsensiCubit>().state.errorMessage;
         CustomFeedback.showError(
           context,
-          "Gagal mencatat jam selesai. Silakan coba lagi.",
+          errorMsg != null && errorMsg.isNotEmpty
+              ? "Gagal mengakhiri shift: $errorMsg"
+              : "Gagal mencatat jam selesai. Silakan coba lagi.",
         );
       }
       _startTimer(); // Restart local timer so stopwatch keeps running
@@ -840,50 +852,56 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   Widget _buildHistoryList(List<AbsensiModel> logs) {
     final admin = _isAdmin;
-    return ListView.builder(
-      padding: const EdgeInsets.only(
-        left: spacing6,
-        right: spacing6,
-        bottom: 100, // padding agar tidak tertutup floating bar
-      ),
-      itemCount: logs.length,
-      itemBuilder: (_, index) {
-        final log = logs[index];
+    return RefreshIndicator(
+      onRefresh: _handleRefresh,
+      color: const Color(0xFFE27D00),
+      backgroundColor: const Color(0xFF2A1A0A),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(
+          left: spacing6,
+          right: spacing6,
+          bottom: 100, // padding agar tidak tertutup floating bar
+        ),
+        itemCount: logs.length,
+        itemBuilder: (_, index) {
+          final log = logs[index];
 
-        return Dismissible(
-          key: Key(log.id ?? 'shift-$index'),
-          direction: admin
-              ? DismissDirection.endToStart
-              : DismissDirection.none,
-          secondaryBackground: _buildDismissibleBackground(),
-          background: const SizedBox(),
-          confirmDismiss: (direction) async {
-            final confirm = await _showDeleteConfirmation(log);
-            return confirm ?? false;
-          },
-          onDismissed: (direction) async {
-            if (log.id != null) {
-              try {
-                await context.read<AbsensiCubit>().deleteShift(
-                  shiftId: log.id!,
-                );
-                if (!mounted) return;
-                CustomFeedback.showSuccess(
-                  context,
-                  "Riwayat absensi ${log.employeeName ?? 'Staf'} berhasil dihapus!",
-                );
-              } catch (e) {
-                if (!mounted) return;
-                CustomFeedback.showError(
-                  context,
-                  "Gagal menghapus riwayat: $e",
-                );
+          return Dismissible(
+            key: Key(log.id ?? 'shift-$index'),
+            direction: admin
+                ? DismissDirection.endToStart
+                : DismissDirection.none,
+            secondaryBackground: _buildDismissibleBackground(),
+            background: const SizedBox(),
+            confirmDismiss: (direction) async {
+              final confirm = await _showDeleteConfirmation(log);
+              return confirm ?? false;
+            },
+            onDismissed: (direction) async {
+              if (log.id != null) {
+                try {
+                  await context.read<AbsensiCubit>().deleteShift(
+                    shiftId: log.id!,
+                  );
+                  if (!mounted) return;
+                  CustomFeedback.showSuccess(
+                    context,
+                    "Riwayat absensi ${log.employeeName ?? 'Staf'} berhasil dihapus!",
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  CustomFeedback.showError(
+                    context,
+                    "Gagal menghapus riwayat: $e",
+                  );
+                }
               }
-            }
-          },
-          child: _buildHistoryItem(log),
-        );
-      },
+            },
+            child: _buildHistoryItem(log),
+          );
+        },
+      ),
     );
   }
 
@@ -1038,21 +1056,38 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.fingerprint_rounded,
-            color: Colors.white12,
-            size: 48,
-          ),
-          const SizedBox(height: spacing2),
-          Text(
-            "Belum ada riwayat absensi kerja.",
-            style: sMedium.copyWith(color: Colors.white30),
-          ),
-        ],
+    return RefreshIndicator(
+      onRefresh: _handleRefresh,
+      color: const Color(0xFFE27D00),
+      backgroundColor: const Color(0xFF2A1A0A),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.fingerprint_rounded,
+                      color: Colors.white12,
+                      size: 48,
+                    ),
+                    const SizedBox(height: spacing2),
+                    Text(
+                      "Belum ada riwayat absensi kerja.",
+                      style: sMedium.copyWith(color: Colors.white30),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

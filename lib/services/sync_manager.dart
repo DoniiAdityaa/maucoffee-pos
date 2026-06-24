@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:maucoffee/config/service_locator.dart';
-import 'package:maucoffee/features/cubit/absensi_cubit.dart';
 import 'package:maucoffee/repository/absensi_repository.dart';
 import 'offline_storage_service.dart';
 
@@ -15,6 +15,10 @@ class SyncManager {
   final _absensiRepository = serviceLocator<AbsensiRepository>();
 
   bool _isSyncing = false;
+
+  // Broadcast controller to notify listeners when sync finishes
+  final StreamController<void> _syncCompletedController = StreamController<void>.broadcast();
+  Stream<void> get onSyncCompleted => _syncCompletedController.stream;
 
   // Inisialisasi pendengar perubahan internet
   void initialize() {
@@ -121,11 +125,8 @@ class SyncManager {
       }
     }
 
-    // Refresh UI secara global melalui Cubit
-    if (serviceLocator.isRegistered<AbsensiCubit>()) {
-      await serviceLocator<AbsensiCubit>().fetchActiveShifts();
-      await serviceLocator<AbsensiCubit>().fetchShiftHistory();
-    }
+    // Notify listeners (e.g. AbsensiCubit) that sync has finished
+    _syncCompletedController.add(null);
   }
 
   // 2. Sinkronisasi Pesanan / Orderan (placeholder masa depan)

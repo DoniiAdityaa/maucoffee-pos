@@ -8,8 +8,11 @@ class OrderRepository {
 
   // 1. Mengambil riwayat transaksi (History) berdasarkan ID Admin
   Future<List<OrderModel>> getOrderHistory({String? adminId}) async {
+    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    if (targetAdminId == null || targetAdminId.isEmpty) {
+      return [];
+    }
     try {
-      final targetAdminId = adminId ?? _client.auth.currentUser?.id ?? '';
       final response = await _client
           .from('orders')
           .select()

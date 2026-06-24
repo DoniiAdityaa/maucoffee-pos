@@ -6,11 +6,15 @@ class EmployeeRepository {
 
   // Mengambil daftar karyawan aktif milik admin saat ini
   Future<List<EmployeeModel>> getEmployees() async {
+    final adminId = _client.auth.currentUser?.id;
+    if (adminId == null || adminId.isEmpty) {
+      return [];
+    }
     try {
       final response = await _client
           .from('employees')
           .select()
-          .eq('admin_id', _client.auth.currentUser?.id ?? '')
+          .eq('admin_id', adminId)
           .order('name', ascending: true);
 
       return (response as List)
@@ -87,6 +91,15 @@ class EmployeeRepository {
     } catch (e) {
       // Abaikan error agar tidak menghalangi login
       print("Gagal mendaftarkan Admin sebagai Employee record: $e");
+    }
+  }
+
+  // Menghapus karyawan dari database
+  Future<void> deleteEmployee(String id) async {
+    try {
+      await _client.from('employees').delete().eq('id', id);
+    } catch (e) {
+      throw Exception('Gagal menghapus karyawan: $e');
     }
   }
 }

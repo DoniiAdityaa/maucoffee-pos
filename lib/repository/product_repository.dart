@@ -6,8 +6,11 @@ class ProductRepository {
 
   // Mengambil seluruh produk yang tersedia berdasarkan ID Admin
   Future<List<ProductModel>> getProducts({String? adminId}) async {
+    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    if (targetAdminId == null || targetAdminId.isEmpty) {
+      return [];
+    }
     try {
-      final targetAdminId = adminId ?? _client.auth.currentUser?.id ?? '';
       final response = await _client
           .from('products')
           .select()
