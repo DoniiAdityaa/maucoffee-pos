@@ -85,7 +85,11 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
           _isProcessed = true;
           _statusMessage = "Memverifikasi...";
         });
-        _controller.stop();
+        
+        // Decouple stopping the camera from the callback thread to prevent deadlock/ANR
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _controller.stop();
+        });
         _scanLineController.stop();
 
         try {
@@ -103,7 +107,11 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                 _isProcessed = false;
                 _statusMessage = "Memindai...";
               });
-              _controller.start();
+              
+              // Decouple starting the camera to prevent deadlock
+              Future.delayed(const Duration(milliseconds: 100), () {
+                _controller.start();
+              });
               _scanLineController.repeat(reverse: true);
             }
           } else {
@@ -122,7 +130,11 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
               _isProcessed = false;
               _statusMessage = "Memindai...";
             });
-            _controller.start();
+            
+            // Decouple starting the camera to prevent deadlock
+            Future.delayed(const Duration(milliseconds: 100), () {
+              _controller.start();
+            });
             _scanLineController.repeat(reverse: true);
           }
         }
@@ -160,7 +172,11 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
         Navigator.pop(context);
       } else {
         setState(() => _isProcessed = false);
-        _controller.start();
+        
+        // Decouple starting the camera to prevent deadlock
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _controller.start();
+        });
         _scanLineController.repeat(reverse: true);
       }
     });
