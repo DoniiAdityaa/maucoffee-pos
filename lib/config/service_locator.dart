@@ -5,12 +5,14 @@ import 'package:get_it/get_it.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/data/api/api_service.dart';
 import 'package:maucoffee/home/cubit/employee_cubit.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
 import 'package:maucoffee/repository/category_repository.dart';
 import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/repository/expense_repository.dart';
 import 'package:maucoffee/repository/order_repository.dart';
 import 'package:maucoffee/repository/product_repository.dart';
 import 'package:maucoffee/repository/absensi_repository.dart';
+import 'package:maucoffee/repository/ingredient_repository.dart';
 import 'package:maucoffee/services/offline_storage_service.dart';
 import 'package:maucoffee/features/cubit/absensi_cubit.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -72,6 +74,9 @@ Future<void> setUpLocator() async {
   serviceLocator.registerFactory<AbsensiRepository>(
     () => AbsensiRepository(),
   );
+  serviceLocator.registerFactory<IngredientRepository>(
+    () => IngredientRepository(),
+  );
   serviceLocator.registerFactory<OfflineStorageService>(
     () => OfflineStorageService(),
   );
@@ -80,5 +85,13 @@ Future<void> setUpLocator() async {
   );
   serviceLocator.registerFactory<EmployeeCubit>(
     () => EmployeeCubit(serviceLocator<EmployeeRepository>()),
+  );
+  serviceLocator.registerFactory<CatalogCubit>(
+    () => CatalogCubit(
+      serviceLocator<ProductRepository>(),
+      serviceLocator<CategoryRepository>(),
+      serviceLocator<IngredientRepository>(),
+      serviceLocator<OfflineStorageService>(),
+    ),
   );
 }

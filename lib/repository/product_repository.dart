@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/model/product_model.dart';
 
@@ -47,10 +48,39 @@ class ProductRepository {
     try {
       final json = product.toJson();
       json.remove('created_at');
+      // Set admin_id jika belum diset agar tidak terupdate menjadi null
+      json['admin_id'] ??= _client.auth.currentUser?.id;
 
       await _client.from('products').update(json).eq('id', product.id!);
     } catch (e) {
       throw Exception('Gagal mengupdate produk: $e');
+    }
+  }
+
+  // Menghapus produk berdasarkan ID
+  Future<void> deleteProduct(String productId) async {
+    try {
+      await _client.from('products').delete().eq('id', productId);
+    } catch (e) {
+      throw Exception('Gagal menghapus produk: $e');
+    }
+  }
+
+  // Mengunggah gambar produk ke Supabase Storage
+  Future<String?> uploadProductImage(File imageFile, String fileName) async {
+    try {
+      final String uid = _client.auth.currentUser?.id ?? 'default';
+      final String path = "$uid/$fileName";
+      await _client.storage
+          .from('product-images')
+          .upload(path, imageFile, fileOptions: const FileOptions(upsert: true));
+
+      final String publicUrl =
+          _client.storage.from('product-images').getPublicUrl(path);
+
+      return publicUrl;
+    } catch (e) {
+      throw Exception('Gagal mengunggah gambar: $e');
     }
   }
 }

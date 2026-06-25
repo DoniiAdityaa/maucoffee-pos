@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
 import 'package:maucoffee/home/cubit/employee_cubit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/config/env/env.dart';
@@ -58,6 +59,7 @@ class MyApp extends StatelessWidget {
         BlocProvider(
           create: (_) => serviceLocator<EmployeeCubit>()..fetchEmployees(),
         ),
+        BlocProvider(create: (_) => serviceLocator<CatalogCubit>()),
       ],
       child: MaterialApp(
         title: 'Mau Coffee POS',

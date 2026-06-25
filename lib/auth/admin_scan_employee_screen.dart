@@ -20,13 +20,14 @@ class AdminScanEmployeeScreen extends StatefulWidget {
 }
 
 class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
   bool _isProcessed = false;
   bool _isTorchOn = false;
   String _statusMessage = "Memindai...";
+  bool _isDisposed = false;
 
   // Scanning line animation
   late AnimationController _scanLineController;
@@ -39,6 +40,7 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
 
     // Scan line animation — bouncing up and down
@@ -57,20 +59,52 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
       duration: const Duration(milliseconds: 1800),
     );
     _cornerPulse = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _cornerPulseController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _cornerPulseController, curve: Curves.easeInOut),
     );
     _cornerPulseController.repeat(reverse: true);
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     _scanLineController.dispose();
     _cornerPulseController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _safeStop();
+    } else if (state == AppLifecycleState.resumed) {
+      if (!_isProcessed) {
+        _safeStart();
+      }
+    }
+  }
+
+  void _safeStop() {
+    Future.delayed(const Duration(milliseconds: 100), () async {
+      if (!mounted || _isDisposed) return;
+      try {
+        await _controller.stop();
+      } catch (e) {
+        debugPrint("Gagal menghentikan kamera: $e");
+      }
+    });
+  }
+
+  void _safeStart() {
+    Future.delayed(const Duration(milliseconds: 100), () async {
+      if (!mounted || _isDisposed) return;
+      try {
+        await _controller.start();
+      } catch (e) {
+        debugPrint("Gagal menjalankan kamera: $e");
+      }
+    });
   }
 
   void _onDetect(BarcodeCapture capture) async {
@@ -85,11 +119,8 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
           _isProcessed = true;
           _statusMessage = "Memverifikasi...";
         });
-        
-        // Decouple stopping the camera from the callback thread to prevent deadlock/ANR
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _controller.stop();
-        });
+
+        _safeStop();
         _scanLineController.stop();
 
         try {
@@ -107,11 +138,8 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                 _isProcessed = false;
                 _statusMessage = "Memindai...";
               });
-              
-              // Decouple starting the camera to prevent deadlock
-              Future.delayed(const Duration(milliseconds: 100), () {
-                _controller.start();
-              });
+
+              _safeStart();
               _scanLineController.repeat(reverse: true);
             }
           } else {
@@ -121,20 +149,14 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
           }
         } catch (e) {
           if (mounted) {
-            CustomFeedback.showError(
-              context,
-              "Koneksi bermasalah: $e",
-            );
+            CustomFeedback.showError(context, "Koneksi bermasalah: $e");
             HapticFeedback.vibrate();
             setState(() {
               _isProcessed = false;
               _statusMessage = "Memindai...";
             });
-            
-            // Decouple starting the camera to prevent deadlock
-            Future.delayed(const Duration(milliseconds: 100), () {
-              _controller.start();
-            });
+
+            _safeStart();
             _scanLineController.repeat(reverse: true);
           }
         }
@@ -154,12 +176,13 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
             parent: animation,
             curve: Curves.easeOut,
           );
-          final slide = Tween<Offset>(
-            begin: const Offset(0, 0.06),
-            end: Offset.zero,
-          ).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-          );
+          final slide =
+              Tween<Offset>(
+                begin: const Offset(0, 0.06),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              );
           return FadeTransition(
             opacity: fade,
             child: SlideTransition(position: slide, child: child),
@@ -172,11 +195,8 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
         Navigator.pop(context);
       } else {
         setState(() => _isProcessed = false);
-        
-        // Decouple starting the camera to prevent deadlock
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _controller.start();
-        });
+
+        _safeStart();
         _scanLineController.repeat(reverse: true);
       }
     });
@@ -196,7 +216,7 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
     String? errorMessage;
 
     // Matikan kamera sebelum modal input dibuka agar menghemat CPU/baterai
-    _controller.stop();
+    _safeStop();
     _scanLineController.stop();
 
     showModalBottomSheet(
@@ -265,7 +285,9 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                             ],
                           ),
                           border: Border.all(
-                            color: const Color(0xFFE27D00).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFFE27D00,
+                            ).withValues(alpha: 0.2),
                             width: 1,
                           ),
                         ),
@@ -331,7 +353,9 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                             ),
                             child: Icon(
                               Icons.tag_rounded,
-                              color: const Color(0xFFE27D00).withValues(alpha: 0.5),
+                              color: const Color(
+                                0xFFE27D00,
+                              ).withValues(alpha: 0.5),
                               size: 20,
                             ),
                           ),
@@ -345,7 +369,9 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                     if (errorMessage != null) ...[
                       const SizedBox(height: spacing2),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: spacing2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: spacing2,
+                        ),
                         child: Text(
                           errorMessage!,
                           style: xsRegular.copyWith(
@@ -393,7 +419,8 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                             onTap: isValidating
                                 ? null
                                 : () async {
-                                    final String val = textController.text.trim();
+                                    final String val = textController.text
+                                        .trim();
                                     if (val.isNotEmpty) {
                                       HapticFeedback.mediumImpact();
                                       setDialogState(() {
@@ -402,13 +429,18 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                                       });
 
                                       try {
-                                        final employeeRepo = serviceLocator<EmployeeRepository>();
-                                        final employee = await employeeRepo.getEmployeeById(val);
+                                        final employeeRepo =
+                                            serviceLocator<
+                                              EmployeeRepository
+                                            >();
+                                        final employee = await employeeRepo
+                                            .getEmployeeById(val);
 
                                         if (employee == null) {
                                           setDialogState(() {
                                             isValidating = false;
-                                            errorMessage = "Kode tidak ditemukan. Pastikan staf sudah membuka pendaftaran QR.";
+                                            errorMessage =
+                                                "Kode tidak ditemukan. Pastikan staf sudah membuka pendaftaran QR.";
                                           });
                                           HapticFeedback.vibrate();
                                         } else {
@@ -418,13 +450,15 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                                           setState(() {
                                             _isProcessed = true;
                                           });
+                                          if (!context.mounted) return;
                                           Navigator.pop(context);
                                           _navigateToRegisterForm(val);
                                         }
                                       } catch (e) {
                                         setDialogState(() {
                                           isValidating = false;
-                                          errorMessage = "Koneksi bermasalah: $e";
+                                          errorMessage =
+                                              "Koneksi bermasalah: $e";
                                         });
                                         HapticFeedback.vibrate();
                                       }
@@ -437,17 +471,25 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                                 gradient: LinearGradient(
                                   colors: isValidating
                                       ? [
-                                          const Color(0xFFE27D00).withValues(alpha: 0.5),
-                                          const Color(0xFFD06A00).withValues(alpha: 0.5)
+                                          const Color(
+                                            0xFFE27D00,
+                                          ).withValues(alpha: 0.5),
+                                          const Color(
+                                            0xFFD06A00,
+                                          ).withValues(alpha: 0.5),
                                         ]
-                                      : [const Color(0xFFE27D00), const Color(0xFFD06A00)],
+                                      : [
+                                          const Color(0xFFE27D00),
+                                          const Color(0xFFD06A00),
+                                        ],
                                 ),
                                 boxShadow: isValidating
                                     ? null
                                     : [
                                         BoxShadow(
-                                          color: const Color(0xFFE27D00)
-                                              .withValues(alpha: 0.3),
+                                          color: const Color(
+                                            0xFFE27D00,
+                                          ).withValues(alpha: 0.3),
                                           blurRadius: 16,
                                           offset: const Offset(0, 6),
                                         ),
@@ -463,13 +505,18 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                                       height: 18,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
                                       ),
                                     ),
                                     const SizedBox(width: spacing2),
                                     Text(
                                       "Memeriksa...",
-                                      style: smBold.copyWith(color: Colors.white),
+                                      style: smBold.copyWith(
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ] else ...[
                                     const Icon(
@@ -480,7 +527,9 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                                     const SizedBox(width: spacing2),
                                     Text(
                                       "Lanjutkan",
-                                      style: smBold.copyWith(color: Colors.white),
+                                      style: smBold.copyWith(
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ],
                                 ],
@@ -502,7 +551,7 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
       ),
     ).then((_) {
       if (!_isProcessed) {
-        _controller.start();
+        _safeStart();
         _scanLineController.repeat(reverse: true);
       }
     });
@@ -644,6 +693,65 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                   child: MobileScanner(
                     controller: _controller,
                     onDetect: _onDetect,
+                    onDetectError: (error, stackTrace) {
+                      debugPrint("MobileScanner onDetectError: $error");
+                    },
+                    errorBuilder: (context, error) {
+                      return Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(spacing5),
+                          margin: const EdgeInsets.symmetric(horizontal: spacing6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1C1207).withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFFF6B6B).withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.videocam_off_rounded,
+                                color: Color(0xFFFF6B6B),
+                                size: 40,
+                              ),
+                              const SizedBox(height: spacing4),
+                              Text(
+                                "Kamera Bermasalah",
+                                style: smBold.copyWith(color: Colors.white),
+                              ),
+                              const SizedBox(height: spacing2),
+                              Text(
+                                "Gagal memulai kamera. Pastikan izin kamera telah diberikan.",
+                                style: xxsRegular.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: spacing4),
+                              GestureDetector(
+                                onTap: () => _safeStart(),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: spacing5,
+                                    vertical: spacing2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE27D00),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    "Coba Lagi",
+                                    style: xsBold.copyWith(color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
 
@@ -664,9 +772,10 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
 
                 // 3. Animated scan line inside the cutout
                 AnimatedBuilder(
-                  animation: Listenable.merge(
-                    [_scanLinePosition, _cornerPulse],
-                  ),
+                  animation: Listenable.merge([
+                    _scanLinePosition,
+                    _cornerPulse,
+                  ]),
                   builder: (context, child) {
                     final box = context.findRenderObject() as RenderBox?;
                     final areaH = box?.size.height ?? 400;
@@ -690,23 +799,23 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                           gradient: LinearGradient(
                             colors: [
                               const Color(0xFFE27D00).withValues(alpha: 0.0),
-                              const Color(0xFFE27D00).withValues(
-                                alpha: 0.75 * _cornerPulse.value,
-                              ),
-                              const Color(0xFFFFAA44).withValues(
-                                alpha: 0.95 * _cornerPulse.value,
-                              ),
-                              const Color(0xFFE27D00).withValues(
-                                alpha: 0.75 * _cornerPulse.value,
-                              ),
+                              const Color(
+                                0xFFE27D00,
+                              ).withValues(alpha: 0.75 * _cornerPulse.value),
+                              const Color(
+                                0xFFFFAA44,
+                              ).withValues(alpha: 0.95 * _cornerPulse.value),
+                              const Color(
+                                0xFFE27D00,
+                              ).withValues(alpha: 0.75 * _cornerPulse.value),
                               const Color(0xFFE27D00).withValues(alpha: 0.0),
                             ],
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFE27D00).withValues(
-                                alpha: 0.35 * _cornerPulse.value,
-                              ),
+                              color: const Color(
+                                0xFFE27D00,
+                              ).withValues(alpha: 0.35 * _cornerPulse.value),
                               blurRadius: 10,
                               spreadRadius: 1,
                             ),
@@ -785,9 +894,9 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                         borderRadius: BorderRadius.circular(100),
                         color: const Color(0xFFE27D00).withValues(alpha: 0.08),
                         border: Border.all(
-                          color: const Color(0xFFE27D00).withValues(
-                            alpha: 0.12 * _cornerPulse.value,
-                          ),
+                          color: const Color(
+                            0xFFE27D00,
+                          ).withValues(alpha: 0.12 * _cornerPulse.value),
                           width: 1,
                         ),
                       ),
@@ -799,14 +908,14 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                             height: 8,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xFFE27D00).withValues(
-                                alpha: _cornerPulse.value,
-                              ),
+                              color: const Color(
+                                0xFFE27D00,
+                              ).withValues(alpha: _cornerPulse.value),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFE27D00).withValues(
-                                    alpha: 0.4 * _cornerPulse.value,
-                                  ),
+                                  color: const Color(
+                                    0xFFE27D00,
+                                  ).withValues(alpha: 0.4 * _cornerPulse.value),
                                   blurRadius: 6,
                                 ),
                               ],
@@ -816,8 +925,9 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
                           Text(
                             _statusMessage,
                             style: xsSemiBold.copyWith(
-                              color: const Color(0xFFE27D00)
-                                  .withValues(alpha: 0.8),
+                              color: const Color(
+                                0xFFE27D00,
+                              ).withValues(alpha: 0.8),
                               letterSpacing: 0.3,
                             ),
                           ),
@@ -944,13 +1054,9 @@ class QrScannerOverlayShape extends ShapeBorder {
       Path.combine(
         PathOperation.difference,
         Path()..addRect(rect),
-        Path()
-          ..addRRect(
-            RRect.fromRectAndRadius(
-              cutoutRect,
-              Radius.circular(borderRadius),
-            ),
-          ),
+        Path()..addRRect(
+          RRect.fromRectAndRadius(cutoutRect, Radius.circular(borderRadius)),
+        ),
       ),
       bgPaint,
     );
@@ -1055,10 +1161,10 @@ class QrScannerOverlayShape extends ShapeBorder {
 
   @override
   ShapeBorder scale(double t) => QrScannerOverlayShape(
-        borderColor: borderColor,
-        borderWidth: borderWidth * t,
-        borderLength: borderLength * t,
-        borderRadius: borderRadius * t,
-        cutOutSize: cutOutSize * t,
-      );
+    borderColor: borderColor,
+    borderWidth: borderWidth * t,
+    borderLength: borderLength * t,
+    borderRadius: borderRadius * t,
+    cutOutSize: cutOutSize * t,
+  );
 }

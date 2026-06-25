@@ -8,6 +8,8 @@ import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 
 class FinanceScreen extends StatefulWidget {
   const FinanceScreen({super.key});
@@ -18,6 +20,11 @@ class FinanceScreen extends StatefulWidget {
 
 class _FinanceScreenState extends State<FinanceScreen>
     with SingleTickerProviderStateMixin {
+  bool get _isAdmin {
+    final userPrefs = serviceLocator<UserPreference>();
+    return userPrefs.getLoginRole() == 'admin';
+  }
+
   late TabController _tabController;
   final currencyFormatter = NumberFormat.currency(
     locale: 'id_ID',
@@ -111,6 +118,41 @@ class _FinanceScreenState extends State<FinanceScreen>
   }
 
   Widget _buildDateSelector() {
+    if (!_isAdmin) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: spacing5),
+        padding: const EdgeInsets.symmetric(
+          horizontal: spacing6,
+          vertical: spacing3,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(100),
+          color: Colors.white.withValues(alpha: 0.04),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.today_rounded,
+              color: primaryColor,
+              size: 16,
+            ),
+            const SizedBox(width: spacing2 + 2),
+            Text(
+              "Hari Ini: ${DateFormat('dd MMM yyyy').format(DateTime.now())}",
+              style: sBold.copyWith(
+                color: Colors.white,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final canGoNext = _canGoToNextDay();
     return Container(
       margin: const EdgeInsets.only(bottom: spacing5),

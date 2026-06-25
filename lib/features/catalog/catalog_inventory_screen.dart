@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -12,46 +14,11 @@ import 'package:maucoffee/data/history_manager.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/utility/rupiah_formatter.dart';
-
-// Model untuk Bahan Baku
-class IngredientItem {
-  final String id;
-  final String name;
-  final String category;
-  double stock;
-  final String unit;
-  final double minStock;
-
-  IngredientItem({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.stock,
-    required this.unit,
-    required this.minStock,
-  });
-}
-
-// Model untuk Menu Penjualan
-class ProductItem {
-  final String id;
-  final String name;
-  final String category;
-  final double price;
-  int stock;
-  final bool isUnlimited;
-  final String? imagePath;
-
-  ProductItem({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.price,
-    required this.stock,
-    this.isUnlimited = false,
-    this.imagePath,
-  });
-}
+import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_state.dart';
+import 'package:maucoffee/model/product_model.dart';
+import 'package:maucoffee/model/category_model.dart';
+import 'package:maucoffee/model/ingredient_model.dart';
 
 class CatalogInventoryScreen extends StatefulWidget {
   const CatalogInventoryScreen({super.key});
@@ -65,6 +32,9 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   late TabController _tabController;
   String _selectedIngredientCategory = "Semua";
   String _selectedProductCategory = "Semua";
+  String? _selectedStockFilter;
+  final Set<String> _dismissedIngredientIds = {};
+  final Set<String> _dismissedProductIds = {};
 
   bool get _isAdmin {
     final userPrefs = serviceLocator<UserPreference>();
@@ -78,169 +48,16 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   );
 
   // Kategori bahan baku
-  final List<String> _ingredientCategories = [
-    "Semua",
-    "Bubuk & Kopi",
-    "Susu & Creamer",
-    "Sirup",
-    "Pemanis",
-  ];
-
-  // Kategori menu penjualan
-  final List<String> _productCategories = ["Semua", "coffee", "tea", "milk"];
-
-  // Data Dummy Menu Penjualan
-  final List<ProductItem> _products = [
-    ProductItem(
-      id: "p1",
-      name: "Es Kopi Susu Aren",
-      category: "Coffee",
-      price: 18000,
-      stock: 100,
-      isUnlimited: true,
-    ),
-    ProductItem(
-      id: "p2",
-      name: "Americano Ice",
-      category: "Coffee",
-      price: 15000,
-      stock: 80,
-      isUnlimited: true,
-    ),
-    ProductItem(
-      id: "p3",
-      name: "Matcha Latte",
-      category: "Non-Coffee",
-      price: 20000,
-      stock: 50,
-    ),
-    ProductItem(
-      id: "p4",
-      name: "Red Velvet Ice",
-      category: "Non-Coffee",
-      price: 20000,
-      stock: 45,
-    ),
-    ProductItem(
-      id: "p5",
-      name: "Croissant Almond",
-      category: "Pastry",
-      price: 25000,
-      stock: 8,
-    ),
-    ProductItem(
-      id: "p6",
-      name: "Cinnamon Roll",
-      category: "Pastry",
-      price: 22000,
-      stock: 12,
-    ),
-    ProductItem(
-      id: "p7",
-      name: "Ekstra Shot Espresso",
-      category: "add on",
-      price: 5000,
-      stock: 200,
-      isUnlimited: true,
-    ),
-  ];
-
-  // Data Dummy Bahan Baku sesuai request user
-  final List<IngredientItem> _ingredients = [
-    IngredientItem(
-      id: "1",
-      name: "bubuk kopi",
-      category: "Bubuk & Kopi",
-      stock: 5,
-      unit: "pcs",
-      minStock: 1,
-    ),
-    IngredientItem(
-      id: "2",
-      name: "bubuk gula aren",
-      category: "Pemanis",
-      stock: 3,
-      unit: "pcs",
-      minStock: 1,
-    ),
-    IngredientItem(
-      id: "3",
-      name: "bubuk creamer",
-      category: "Susu & Creamer",
-      stock: 1,
-      unit: "pcs",
-      minStock: 1,
-    ), // Menipis
-    IngredientItem(
-      id: "4",
-      name: "matcha",
-      category: "Bubuk & Kopi",
-      stock: 4,
-      unit: "pcs",
-      minStock: 1,
-    ),
-    IngredientItem(
-      id: "5",
-      name: "susu uht",
-      category: "Susu & Creamer",
-      stock: 6,
-      unit: "pcs",
-      minStock: 1,
-    ),
-    IngredientItem(
-      id: "6",
-      name: "susu kaleng",
-      category: "Susu & Creamer",
-      stock: 0,
-      unit: "pcs",
-      minStock: 1,
-    ), // Habis
-    IngredientItem(
-      id: "7",
-      name: "red velvet",
-      category: "Bubuk & Kopi",
-      stock: 2,
-      unit: "pcs",
-      minStock: 1,
-    ),
-    IngredientItem(
-      id: "8",
-      name: "sirup vanilla",
-      category: "Sirup",
-      stock: 1,
-      unit: "pcs",
-      minStock: 1,
-    ), // Menipis
-    IngredientItem(
-      id: "9",
-      name: "taro",
-      category: "Bubuk & Kopi",
-      stock: 1,
-      unit: "pcs",
-      minStock: 1,
-    ), // Menipis
-    IngredientItem(
-      id: "10",
-      name: "sirup gula aren",
-      category: "Sirup",
-      stock: 4,
-      unit: "pcs",
-      minStock: 1,
-    ),
-    IngredientItem(
-      id: "11",
-      name: "sirup butterscotch",
-      category: "Sirup",
-      stock: 3,
-      unit: "pcs",
-      minStock: 1,
-    ),
-  ];
+  final List<String> _ingredientCategories = ["Semua", "Bubuk & Kopi", "Sirup"];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint("CatalogInventoryScreen: Calling fetchCatalog from initState");
+      context.read<CatalogCubit>().fetchCatalog();
+    });
   }
 
   @override
@@ -249,16 +66,16 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     super.dispose();
   }
 
-  // Menghitung status stok bahan baku (0 = habis, 1 = menipis, >= 2 = aman)
-  Map<String, int> _getIngredientStats() {
+  // Menghitung status stok bahan baku (0 = habis, <= minStock = menipis, > minStock = aman)
+  Map<String, int> _getIngredientStats(List<IngredientModel> ingredients) {
     int safeCount = 0;
     int warningCount = 0;
     int emptyCount = 0;
 
-    for (var ing in _ingredients) {
+    for (var ing in ingredients) {
       if (ing.stock == 0) {
         emptyCount++;
-      } else if (ing.stock == 1) {
+      } else if (ing.stock <= ing.minStock) {
         warningCount++;
       } else {
         safeCount++;
@@ -377,39 +194,18 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                         return;
                       }
 
-                      final newId = DateTime.now().millisecondsSinceEpoch
-                          .toString();
-                      setState(() {
-                        _ingredients.add(
-                          IngredientItem(
-                            id: newId,
-                            name: name.toLowerCase(),
-                            category: selectedCategory,
-                            stock: stock,
-                            unit: "pcs",
-                            minStock: 1,
-                          ),
-                        );
-                      });
-
-                      // Catat ke HistoryManager
-                      HistoryManager().addStockLog(
-                        StockHistory(
-                          id: "LOG-$newId",
-                          ingredientName: name.toLowerCase(),
-                          category: selectedCategory,
-                          adjustedAmount: stock,
-                          stockBefore: 0,
-                          stockAfter: stock,
-                          type: "Baru",
-                          dateTime: DateTime.now(),
-                        ),
+                      context.read<CatalogCubit>().addIngredient(
+                        name: name.toLowerCase(),
+                        category: selectedCategory,
+                        stock: stock,
+                        unit: "pcs",
+                        minStock: 1.0,
                       );
 
                       Navigator.pop(context);
                       CustomFeedback.showSuccess(
                         context,
-                        "Bahan baku berhasil ditambahkan!",
+                        "Bahan baku '${name}' sedang ditambahkan...",
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -434,7 +230,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   }
 
   // Dialog sesuaikan stok (Restock)
-  void _showRestockDialog(IngredientItem item) {
+  void _showRestockDialog(IngredientModel item, bool isOffline) {
     final adjustController = TextEditingController();
     bool isAdd = true; // true untuk tambah stok, false untuk kurangi stok
 
@@ -581,27 +377,26 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                       return;
                     }
 
+                    if (isOffline) {
+                      CustomFeedback.showError(
+                        context,
+                        "Tidak dapat menyesuaikan stok saat offline.",
+                      );
+                      return;
+                    }
+
                     final stockBefore = item.stock;
                     final stockAfter = isAdd
                         ? stockBefore + adjustVal
                         : (stockBefore - adjustVal).clamp(0.0, double.infinity);
 
-                    setState(() {
-                      item.stock = stockAfter;
-                    });
-
-                    // Catat ke HistoryManager
-                    HistoryManager().addStockLog(
-                      StockHistory(
-                        id: "LOG-${DateTime.now().millisecondsSinceEpoch}",
-                        ingredientName: item.name,
-                        category: item.category,
-                        adjustedAmount: adjustVal,
-                        stockBefore: stockBefore,
-                        stockAfter: stockAfter,
-                        type: isAdd ? "Tambah" : "Kurang",
-                        dateTime: DateTime.now(),
-                      ),
+                    context.read<CatalogCubit>().updateIngredient(
+                      id: item.id!,
+                      name: item.name,
+                      category: item.category,
+                      stock: stockAfter,
+                      unit: item.unit,
+                      minStock: item.minStock,
                     );
 
                     Navigator.pop(context);
@@ -632,12 +427,13 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   }
 
   // Dialog tambah menu penjualan baru
-  void _showAddProductDialog() {
+  void _showAddProductDialog(List<CategoryModel> dbCategories) {
     final nameController = TextEditingController();
     final priceController = TextEditingController();
 
-    String selectedCategory =
-        _productCategories[1]; // default Kategori pertama setelah Semua
+    String? selectedCategoryId = dbCategories.isNotEmpty
+        ? dbCategories[0].id
+        : null;
     String? selectedImagePath;
 
     showDialog(
@@ -711,7 +507,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: selectedCategory,
+                        value: selectedCategoryId,
                         dropdownColor: const Color(0xFF2A1A0A),
                         icon: const Icon(
                           Icons.arrow_drop_down,
@@ -721,19 +517,18 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                         onChanged: (String? val) {
                           if (val != null) {
                             setDialogState(() {
-                              selectedCategory = val;
+                              selectedCategoryId = val;
                             });
                           }
                         },
-                        items: _productCategories
-                            .where((cat) => cat != "Semua")
-                            .map<DropdownMenuItem<String>>((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              );
-                            })
-                            .toList(),
+                        items: dbCategories.map<DropdownMenuItem<String>>((
+                          CategoryModel cat,
+                        ) {
+                          return DropdownMenuItem<String>(
+                            value: cat.id,
+                            child: Text(cat.name),
+                          );
+                        }).toList(),
                       ),
                     ),
                   ),
@@ -759,7 +554,6 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                             priceController.text.replaceAll('.', '').trim(),
                           ) ??
                           0;
-                      const stock = 0;
 
                       if (name.isEmpty) {
                         CustomFeedback.showError(
@@ -777,26 +571,31 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                         return;
                       }
 
-                      final newId = "p${DateTime.now().millisecondsSinceEpoch}";
-                      setState(() {
-                        _products.add(
-                          ProductItem(
-                            id: newId,
-                            name: name,
-                            category: selectedCategory,
-                            price: price,
-                            stock: stock,
-                            isUnlimited: true,
-                            imagePath: selectedImagePath,
-                          ),
+                      if (selectedCategoryId == null) {
+                        CustomFeedback.showError(
+                          context,
+                          "Kategori belum dipilih!",
                         );
-                      });
+                        return;
+                      }
+
+                      // Memanggil Cubit untuk menambahkan produk
+                      context.read<CatalogCubit>().addProduct(
+                        name: name,
+                        price: price,
+                        categoryId: selectedCategoryId!,
+                        stock: 0,
+                        isAvailable: true,
+                        imageFile: selectedImagePath != null
+                            ? File(selectedImagePath!)
+                            : null,
+                      );
 
                       Navigator.pop(context);
                       HapticFeedback.mediumImpact();
                       CustomFeedback.showSuccess(
                         context,
-                        "Menu '$name' berhasil ditambahkan!",
+                        "Menu '$name' sedang disimpan ke server...",
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -821,18 +620,22 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   }
 
   // Dialog edit menu penjualan
-  void _showEditProductDialog(ProductItem product) {
+  void _showEditProductDialog(
+    ProductModel product,
+    List<CategoryModel> dbCategories,
+  ) {
     final nameController = TextEditingController(text: product.name);
     final priceFormatter = NumberFormat.decimalPattern('id');
     final priceController = TextEditingController(
       text: priceFormatter.format(product.price),
     );
 
-    String selectedCategory = _productCategories.contains(product.category)
-        ? product.category
-        : _productCategories[1]; // default jika tidak ditemukan
+    String? selectedCategoryId =
+        dbCategories.any((cat) => cat.id == product.categoryId)
+        ? product.categoryId
+        : (dbCategories.isNotEmpty ? dbCategories[0].id : null);
 
-    String? selectedImagePath = product.imagePath;
+    String? selectedImagePath = product.imageUrl;
 
     showDialog(
       context: context,
@@ -902,7 +705,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: selectedCategory,
+                        value: selectedCategoryId,
                         dropdownColor: const Color(0xFF2A1A0A),
                         icon: const Icon(
                           Icons.arrow_drop_down,
@@ -912,19 +715,18 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                         onChanged: (String? val) {
                           if (val != null) {
                             setDialogState(() {
-                              selectedCategory = val;
+                              selectedCategoryId = val;
                             });
                           }
                         },
-                        items: _productCategories
-                            .where((cat) => cat != "Semua")
-                            .map<DropdownMenuItem<String>>((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              );
-                            })
-                            .toList(),
+                        items: dbCategories.map<DropdownMenuItem<String>>((
+                          CategoryModel cat,
+                        ) {
+                          return DropdownMenuItem<String>(
+                            value: cat.id,
+                            child: Text(cat.name),
+                          );
+                        }).toList(),
                       ),
                     ),
                   ),
@@ -957,7 +759,6 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                                       .trim(),
                                 ) ??
                                 0;
-                            final stock = product.stock;
 
                             if (name.isEmpty) {
                               CustomFeedback.showError(
@@ -975,28 +776,39 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                               return;
                             }
 
-                            setState(() {
-                              final index = _products.indexWhere(
-                                (p) => p.id == product.id,
+                            if (selectedCategoryId == null) {
+                              CustomFeedback.showError(
+                                context,
+                                "Kategori belum dipilih!",
                               );
-                              if (index != -1) {
-                                _products[index] = ProductItem(
-                                  id: product.id,
-                                  name: name,
-                                  category: selectedCategory,
-                                  price: price,
-                                  stock: stock,
-                                  isUnlimited: product.isUnlimited,
-                                  imagePath: selectedImagePath,
-                                );
-                              }
-                            });
+                              return;
+                            }
+
+                            final bool hasNewImage =
+                                selectedImagePath != null &&
+                                !selectedImagePath!.startsWith('http');
+
+                            // Memanggil Cubit untuk memperbarui produk
+                            context.read<CatalogCubit>().updateProduct(
+                              id: product.id!,
+                              name: name,
+                              price: price,
+                              categoryId: selectedCategoryId!,
+                              stock: product.stock,
+                              isAvailable: product.isAvailable,
+                              currentImageUrl: hasNewImage
+                                  ? null
+                                  : selectedImagePath,
+                              newImageFile: hasNewImage
+                                  ? File(selectedImagePath!)
+                                  : null,
+                            );
 
                             Navigator.pop(context);
                             HapticFeedback.mediumImpact();
                             CustomFeedback.showSuccess(
                               context,
-                              "Detail menu berhasil diperbarui!",
+                              "Perubahan sedang disimpan...",
                             );
                           },
                           style: ElevatedButton.styleFrom(
@@ -1026,7 +838,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   }
 
   // Dialog konfirmasi hapus menu
-  Future<bool?> _showDeleteProductConfirmation(ProductItem product) {
+  Future<bool?> _showDeleteProductConfirmation(ProductModel product) {
     return showDialog<bool>(
       context: context,
       builder: (context) => Dialog(
@@ -1124,108 +936,249 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor:
-          Colors.transparent, // navigation background will be visible
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header Screen
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: spacing6,
-                vertical: spacing2,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Katalog & Inventory",
-                    style: lgBold.copyWith(color: Colors.white),
-                  ),
+    return BlocListener<CatalogCubit, CatalogState>(
+      listener: (context, state) {
+        if (state is CatalogError) {
+          CustomFeedback.showError(context, state.message);
+        } else if (state is CatalogLoaded) {
+          setState(() {
+            _dismissedIngredientIds.clear();
+            _dismissedProductIds.clear();
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor:
+            Colors.transparent, // navigation background will be visible
+        body: SafeArea(
+          bottom: false,
+          child: BlocBuilder<CatalogCubit, CatalogState>(
+            builder: (context, state) {
+              debugPrint("CatalogInventoryScreen: BlocBuilder state = $state");
 
-                  // Action Button
-                  GestureDetector(
-                    onTap: () {
-                      if (_tabController.index == 0) {
-                        _showAddProductDialog();
-                      } else {
-                        _showAddIngredientDialog();
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: primaryColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: primaryColor.withOpacity(0.2),
-                          width: 1,
+              List<ProductModel>? products;
+              List<CategoryModel>? categories;
+              List<IngredientModel>? ingredients;
+              bool isOffline = false;
+              bool isLoading = false;
+
+              if (state is CatalogLoaded) {
+                products = state.products;
+                categories = state.categories;
+                ingredients = state.ingredients;
+                isOffline = state.isOffline;
+              } else if (state is CatalogLoading) {
+                products = state.previousProducts;
+                categories = state.previousCategories;
+                ingredients = state.previousIngredients;
+                isLoading = true;
+              }
+
+              final productsList = products ?? <ProductModel>[];
+              final categoriesList = categories ?? <CategoryModel>[];
+              final ingredientsList = ingredients ?? <IngredientModel>[];
+
+              // Jika terjadi error dan data kosong
+              if ((products == null ||
+                      categories == null ||
+                      ingredients == null) &&
+                  state is CatalogError) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: Colors.redAccent,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        state.message,
+                        style: sMedium.copyWith(color: Colors.white70),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () =>
+                            context.read<CatalogCubit>().fetchCatalog(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                        ),
+                        child: Text(
+                          "Coba Lagi",
+                          style: sBold.copyWith(color: Colors.white),
                         ),
                       ),
-                      child: const Icon(
-                        Icons.add_rounded,
-                        color: primaryColor,
-                        size: 20,
+                    ],
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Header Screen
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: spacing6,
+                      vertical: spacing2,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              "Katalog & Inventory",
+                              style: lgBold.copyWith(color: Colors.white),
+                            ),
+                            if (isOffline) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.redAccent.withOpacity(0.5),
+                                  ),
+                                ),
+                                child: Text(
+                                  "Offline",
+                                  style: xxxsBold.copyWith(
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+
+                        // Action Button
+                        if ((!isOffline || _tabController.index == 1) &&
+                            (_tabController.index == 1 ||
+                                categoriesList.isNotEmpty))
+                          GestureDetector(
+                            onTap: () {
+                              if (_tabController.index == 0) {
+                                _showAddProductDialog(categoriesList);
+                              } else {
+                                _showAddIngredientDialog();
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: primaryColor.withOpacity(0.2),
+                                  width: 1,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.add_rounded,
+                                color: primaryColor,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: spacing6),
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.08),
+                        ),
+                      ),
+                      child: TabBar(
+                        controller: _tabController,
+                        indicator: BoxDecoration(
+                          color: primaryColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: primaryColor, width: 1),
+                        ),
+                        labelColor: primaryColor,
+                        unselectedLabelColor: Colors.white60,
+                        labelStyle: sBold,
+                        unselectedLabelStyle: sMedium,
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        tabs: const [
+                          Tab(text: "Menu Penjualan"),
+                          Tab(text: "Bahan Baku (Inventory)"),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
+                  const SizedBox(height: spacing3),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: spacing6),
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  indicator: BoxDecoration(
-                    color: primaryColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: primaryColor, width: 1),
+                  // Tab Views
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildProductTab(
+                          productsList,
+                          categoriesList,
+                          isOffline,
+                          isLoading,
+                        ),
+                        _buildIngredientTab(
+                          ingredientsList,
+                          isOffline,
+                          isLoading,
+                        ),
+                      ],
+                    ),
                   ),
-                  labelColor: primaryColor,
-                  unselectedLabelColor: Colors.white60,
-                  labelStyle: sBold,
-                  unselectedLabelStyle: sMedium,
-                  dividerColor: Colors.transparent,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  tabs: const [
-                    Tab(text: "Menu Penjualan"),
-                    Tab(text: "Bahan Baku (Inventory)"),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: spacing3),
-
-            // Tab Views
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [_buildProductTab(), _buildIngredientTab()],
-              ),
-            ),
-          ],
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
   // ── Tab 1: Menu Penjualan ──
-  Widget _buildProductTab() {
-    final filtered = _products.where((p) {
-      return _selectedProductCategory == "Semua" ||
-          p.category == _selectedProductCategory;
+  Widget _buildProductTab(
+    List<ProductModel> products,
+    List<CategoryModel> categories,
+    bool isOffline,
+    bool isLoading,
+  ) {
+    if (isLoading && products.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: primaryColor),
+      );
+    }
+
+    final List<String> productCategories = [
+      "Semua",
+      ...categories.map((c) => c.name),
+    ];
+
+    final filtered = products.where((p) {
+      if (_dismissedProductIds.contains(p.id)) return false;
+      if (_selectedProductCategory == "Semua") return true;
+      final cat = categories.firstWhere(
+        (c) => c.name.toLowerCase() == _selectedProductCategory.toLowerCase(),
+        orElse: () => CategoryModel(name: ''),
+      );
+      return p.categoryId == cat.id;
     }).toList();
 
     return Column(
@@ -1237,10 +1190,11 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: spacing6),
-            itemCount: _productCategories.length,
+            itemCount: productCategories.length,
             itemBuilder: (context, index) {
-              final cat = _productCategories[index];
-              final bool isSelected = _selectedProductCategory == cat;
+              final cat = productCategories[index];
+              final bool isSelected =
+                  _selectedProductCategory.toLowerCase() == cat.toLowerCase();
               return Padding(
                 padding: const EdgeInsets.only(right: spacing3),
                 child: ChoiceChip(
@@ -1291,7 +1245,14 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                     final itemWidget = GestureDetector(
                       onTap: () {
                         HapticFeedback.lightImpact();
-                        _showEditProductDialog(product);
+                        if (isOffline) {
+                          CustomFeedback.showError(
+                            context,
+                            "Tidak dapat mengedit produk saat offline.",
+                          );
+                        } else {
+                          _showEditProductDialog(product, categories);
+                        }
                       },
                       child: Container(
                         margin: const EdgeInsets.only(bottom: spacing3),
@@ -1316,17 +1277,34 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                                   color: Colors.white.withOpacity(0.08),
                                 ),
                               ),
-                              child: product.imagePath != null && product.imagePath!.isNotEmpty
+                              child:
+                                  product.imageUrl != null &&
+                                      product.imageUrl!.isNotEmpty
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
-                                      child: Image.file(
-                                        File(product.imagePath!),
+                                      child: CachedNetworkImage(
+                                        imageUrl: product.imageUrl!,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) => Icon(
-                                          Icons.coffee_rounded,
-                                          color: primaryColor.withOpacity(0.6),
-                                          size: 24,
-                                        ),
+                                        placeholder: (context, url) =>
+                                            const Center(
+                                              child: SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      color: primaryColor,
+                                                      strokeWidth: 2,
+                                                    ),
+                                              ),
+                                            ),
+                                        errorWidget: (context, url, error) =>
+                                            Icon(
+                                              Icons.coffee_rounded,
+                                              color: primaryColor.withOpacity(
+                                                0.6,
+                                              ),
+                                              size: 24,
+                                            ),
                                       ),
                                     )
                                   : Icon(
@@ -1355,10 +1333,20 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                                         ),
                                         decoration: BoxDecoration(
                                           color: Colors.white.withOpacity(0.04),
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         child: Text(
-                                          product.category,
+                                          categories
+                                              .firstWhere(
+                                                (c) =>
+                                                    c.id == product.categoryId,
+                                                orElse: () => CategoryModel(
+                                                  name: 'General',
+                                                ),
+                                              )
+                                              .name,
                                           style: xxxsMedium.copyWith(
                                             color: Colors.white60,
                                           ),
@@ -1381,8 +1369,8 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                     );
 
                     return Dismissible(
-                      key: Key(product.id),
-                      direction: _isAdmin
+                      key: Key(product.id ?? ''),
+                      direction: _isAdmin && !isOffline
                           ? DismissDirection.endToStart
                           : DismissDirection.none,
                       secondaryBackground: _buildDismissibleBackground(),
@@ -1396,11 +1384,12 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                       },
                       onDismissed: (direction) {
                         setState(() {
-                          _products.removeWhere((p) => p.id == product.id);
+                          _dismissedProductIds.add(product.id!);
                         });
+                        context.read<CatalogCubit>().deleteProduct(product.id!);
                         CustomFeedback.showSuccess(
                           context,
-                          "Menu '${product.name}' berhasil dihapus!",
+                          "Menu '${product.name}' sedang dihapus...",
                         );
                       },
                       child: itemWidget,
@@ -1412,12 +1401,64 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     );
   }
 
-  // ── Tab 2: Bahan Baku (Inventory) ──
-  Widget _buildIngredientTab() {
-    final stats = _getIngredientStats();
-    final filtered = _ingredients.where((i) {
-      return _selectedIngredientCategory == "Semua" ||
-          i.category == _selectedIngredientCategory;
+  Future<bool?> _showDeleteIngredientConfirmation(IngredientModel item) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2A1A0A),
+        title: Text(
+          "Hapus Bahan Baku",
+          style: mdBold.copyWith(color: Colors.white),
+        ),
+        content: Text(
+          "Apakah Anda yakin ingin menghapus '${item.name}' dari inventory?",
+          style: sMedium.copyWith(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text("Batal", style: sBold.copyWith(color: Colors.white30)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              "Hapus",
+              style: sBold.copyWith(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIngredientTab(
+    List<IngredientModel> ingredients,
+    bool isOffline,
+    bool isLoading,
+  ) {
+    if (isLoading && ingredients.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: primaryColor),
+      );
+    }
+
+    final stats = _getIngredientStats(ingredients);
+    final filtered = ingredients.where((i) {
+      if (_dismissedIngredientIds.contains(i.id)) return false;
+      
+      // Filter kategori
+      final matchesCategory = _selectedIngredientCategory == "Semua" ||
+          i.category.toLowerCase() == _selectedIngredientCategory.toLowerCase();
+      if (!matchesCategory) return false;
+
+      // Filter stok (Opsi B)
+      if (_selectedStockFilter == 'empty') {
+        return i.stock == 0;
+      } else if (_selectedStockFilter == 'warning') {
+        return i.stock <= i.minStock && i.stock > 0;
+      }
+
+      return true;
     }).toList();
 
     return Column(
@@ -1432,21 +1473,50 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
           child: Row(
             children: [
               _buildStatCard(
-                "Total",
-                _ingredients.length.toString(),
-                Colors.blueAccent,
+                label: "Total",
+                value: ingredients.length.toString(),
+                color: Colors.blueAccent,
+                isSelected: _selectedStockFilter == null,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _selectedStockFilter = null;
+                  });
+                },
               ),
               const SizedBox(width: spacing2),
               _buildStatCard(
-                "Menipis",
-                stats["warning"].toString(),
-                const Color(0xFFFF9E22),
+                label: "Menipis",
+                value: stats["warning"].toString(),
+                color: const Color(0xFFFF9E22),
+                isSelected: _selectedStockFilter == 'warning',
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    if (_selectedStockFilter == 'warning') {
+                      _selectedStockFilter = null;
+                    } else {
+                      _selectedStockFilter = 'warning';
+                    }
+                  });
+                },
               ),
               const SizedBox(width: spacing2),
               _buildStatCard(
-                "Habis",
-                stats["empty"].toString(),
-                Colors.redAccent,
+                label: "Habis",
+                value: stats["empty"].toString(),
+                color: Colors.redAccent,
+                isSelected: _selectedStockFilter == 'empty',
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    if (_selectedStockFilter == 'empty') {
+                      _selectedStockFilter = null;
+                    } else {
+                      _selectedStockFilter = 'empty';
+                    }
+                  });
+                },
               ),
             ],
           ),
@@ -1462,7 +1532,9 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
             itemCount: _ingredientCategories.length,
             itemBuilder: (context, index) {
               final cat = _ingredientCategories[index];
-              final bool isSelected = _selectedIngredientCategory == cat;
+              final bool isSelected =
+                  _selectedIngredientCategory.toLowerCase() ==
+                  cat.toLowerCase();
               return Padding(
                 padding: const EdgeInsets.only(right: spacing3),
                 child: ChoiceChip(
@@ -1512,7 +1584,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                     final item = filtered[index];
                     final bool isEmpty = item.stock == 0;
                     final bool isWarning =
-                        item.stock == 1; // Aturan baru: 1 pcs = menipis
+                        item.stock <= item.minStock && item.stock > 0;
 
                     Color statusColor = const Color(
                       0xFF2D8A4E,
@@ -1526,11 +1598,10 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                       statusText = "Menipis";
                     }
 
-                    return GestureDetector(
+                    final itemWidget = GestureDetector(
                       onTap: () {
                         HapticFeedback.lightImpact();
-
-                        _showRestockDialog(item);
+                        _showRestockDialog(item, isOffline);
                       },
                       child: Container(
                         margin: const EdgeInsets.only(bottom: spacing3),
@@ -1579,7 +1650,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        "Batas Minimal: 1 ${item.unit}",
+                                        "Batas Minimal: ${item.minStock.toStringAsFixed(0)} ${item.unit}",
                                         style: xxsMedium.copyWith(
                                           color: Colors.white30,
                                         ),
@@ -1628,29 +1699,38 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                                     ),
                                   ],
                                 ),
-                                const SizedBox(width: spacing3),
-                                // Restock Action Button
-                                // IconButton(
-                                //   style: IconButton.styleFrom(
-                                //     backgroundColor: primaryColor.withOpacity(
-                                //       0.1,
-                                //     ),
-                                //     shape: RoundedRectangleBorder(
-                                //       borderRadius: BorderRadius.circular(8),
-                                //     ),
-                                //   ),
-                                //   icon: const Icon(
-                                //     Icons.add_business_rounded,
-                                //     color: primaryColor,
-                                //     size: 18,
-                                //   ),
-                                //   onPressed: () => _showRestockDialog(item),
-                                // ),
                               ],
                             ),
                           ],
                         ),
                       ),
+                    );
+
+                    return Dismissible(
+                      key: Key(item.id ?? ''),
+                      direction: _isAdmin && !isOffline
+                          ? DismissDirection.endToStart
+                          : DismissDirection.none,
+                      secondaryBackground: _buildDismissibleBackground(),
+                      background: const SizedBox(),
+                      confirmDismiss: (direction) async {
+                        HapticFeedback.mediumImpact();
+                        final confirm = await _showDeleteIngredientConfirmation(
+                          item,
+                        );
+                        return confirm ?? false;
+                      },
+                      onDismissed: (direction) {
+                        setState(() {
+                          _dismissedIngredientIds.add(item.id!);
+                        });
+                        context.read<CatalogCubit>().deleteIngredient(item.id!);
+                        CustomFeedback.showSuccess(
+                          context,
+                          "Bahan baku '${item.name}' sedang dihapus...",
+                        );
+                      },
+                      child: itemWidget,
                     );
                   },
                 ),
@@ -1688,28 +1768,43 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     );
   }
 
-  Widget _buildStatCard(String label, String value, Color color) {
+  Widget _buildStatCard({
+    required String label,
+    required String value,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          vertical: spacing3,
-          horizontal: spacing4,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.01),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.15)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: xxsBold.copyWith(color: Colors.white, letterSpacing: 0.5),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(
+            vertical: spacing3,
+            horizontal: spacing4,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? color.withOpacity(0.08)
+                : Colors.white.withOpacity(0.01),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : color.withOpacity(0.15),
+              width: isSelected ? 2.0 : 1.0,
             ),
-            const SizedBox(height: 4),
-            Text(value, style: mdBold.copyWith(color: color)),
-          ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: xxsBold.copyWith(color: Colors.white, letterSpacing: 0.5),
+              ),
+              const SizedBox(height: 4),
+              Text(value, style: mdBold.copyWith(color: color)),
+            ],
+          ),
         ),
       ),
     );
@@ -1741,10 +1836,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "Foto Produk",
-          style: xsBold.copyWith(color: Colors.white70),
-        ),
+        Text("Foto Produk", style: xsBold.copyWith(color: Colors.white70)),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: () async {
@@ -1768,13 +1860,25 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                     ),
                     const SizedBox(height: spacing4),
                     ListTile(
-                      leading: const Icon(Icons.camera_alt_rounded, color: primaryColor),
-                      title: Text("Kamera", style: sMedium.copyWith(color: Colors.white)),
+                      leading: const Icon(
+                        Icons.camera_alt_rounded,
+                        color: primaryColor,
+                      ),
+                      title: Text(
+                        "Kamera",
+                        style: sMedium.copyWith(color: Colors.white),
+                      ),
                       onTap: () => Navigator.pop(context, ImageSource.camera),
                     ),
                     ListTile(
-                      leading: const Icon(Icons.photo_library_rounded, color: primaryColor),
-                      title: Text("Galeri", style: sMedium.copyWith(color: Colors.white)),
+                      leading: const Icon(
+                        Icons.photo_library_rounded,
+                        color: primaryColor,
+                      ),
+                      title: Text(
+                        "Galeri",
+                        style: sMedium.copyWith(color: Colors.white),
+                      ),
                       onTap: () => Navigator.pop(context, ImageSource.gallery),
                     ),
                   ],
@@ -1816,10 +1920,25 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                       Positioned.fill(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            File(currentImagePath),
-                            fit: BoxFit.cover,
-                          ),
+                          child: currentImagePath.startsWith('http')
+                              ? CachedNetworkImage(
+                                  imageUrl: currentImagePath,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => const Center(
+                                    child: CircularProgressIndicator(
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) =>
+                                      const Icon(
+                                        Icons.error_outline_rounded,
+                                        color: Colors.redAccent,
+                                      ),
+                                )
+                              : Image.file(
+                                  File(currentImagePath),
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                       ),
                       Positioned(

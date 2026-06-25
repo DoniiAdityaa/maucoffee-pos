@@ -2,9 +2,11 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/home/admin_home_screen.dart';
 import 'package:maucoffee/features/sales_transaction_screen.dart';
-import 'package:maucoffee/features/catalog_inventory_screen.dart';
+import 'package:maucoffee/features/catalog/catalog_inventory_screen.dart';
 import 'package:maucoffee/features/history_screen.dart';
 import 'package:maucoffee/features/attendance_screen.dart';
 import 'package:maucoffee/features/finance_screen.dart';
@@ -14,8 +16,6 @@ import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
-import 'package:maucoffee/config/service_locator.dart';
-import 'package:maucoffee/config/user_preference.dart';
 
 class MainNavigation extends StatefulWidget {
   final int initialIndex;
@@ -71,7 +71,9 @@ class _MainNavigationState extends State<MainNavigation> {
 
   void _startNavigationTimer() {
     _navigationTimer?.cancel();
-    _navigationTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+    _navigationTimer = Timer.periodic(const Duration(seconds: 1), (
+      timer,
+    ) async {
       final activeShift = await HistoryManager().getActiveShift();
       if (activeShift != null) {
         final startTime = activeShift["startTime"] as DateTime;
@@ -89,7 +91,8 @@ class _MainNavigationState extends State<MainNavigation> {
             setState(() {
               _activeShiftStartTime = null;
               _activeShiftFormattedDuration = "00:00:00";
-              _hasInitializedPillPosition = false; // Reset position on shift stop
+              _hasInitializedPillPosition =
+                  false; // Reset position on shift stop
             });
           }
         }
@@ -97,14 +100,12 @@ class _MainNavigationState extends State<MainNavigation> {
     });
   }
 
-
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, "0");
     String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
     String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
     return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -114,7 +115,8 @@ class _MainNavigationState extends State<MainNavigation> {
     // Initialize pill position to bottom right on first active frame
     if (_activeShiftStartTime != null && !_hasInitializedPillPosition) {
       _pillX = size.width - 135 - spacing4;
-      _pillY = size.height - (bottomPadding > 0 ? bottomPadding : spacing5) - 56;
+      _pillY =
+          size.height - (bottomPadding > 0 ? bottomPadding : spacing5) - 56;
       _hasInitializedPillPosition = true;
     }
 
@@ -122,7 +124,6 @@ class _MainNavigationState extends State<MainNavigation> {
       extendBody: true, // Let content flow behind floating glass bar
       body: Stack(
         children: [
-
           // Background Gradient matching other screens
           Container(
             decoration: const BoxDecoration(
@@ -206,8 +207,6 @@ class _MainNavigationState extends State<MainNavigation> {
         ],
       ),
     );
-
-
   }
 
   // ── Private Navigation Widgets ──
@@ -318,7 +317,7 @@ class _MainNavigationState extends State<MainNavigation> {
     final bool isFinance = index == 5;
     final bool isFinanceDisabled = isFinance && !_isAdmin;
     final bool isActive = _currentIndex == index;
-    
+
     return Expanded(
       child: GestureDetector(
         onTap: () {
@@ -330,14 +329,14 @@ class _MainNavigationState extends State<MainNavigation> {
             );
             return;
           }
-          if (isFinanceDisabled) {
-            HapticFeedback.heavyImpact();
-            CustomFeedback.showError(
-              context,
-              "Laporan Keuangan tidak bisa diakses oleh staff",
-            );
-            return;
-          }
+          // if (isFinanceDisabled) {
+          //   HapticFeedback.heavyImpact();
+          //   CustomFeedback.showError(
+          //     context,
+          //     "Laporan Keuangan tidak bisa diakses oleh staff",
+          //   );
+          //   return;
+          // }
           if (_currentIndex != index) {
             HapticFeedback.lightImpact();
             setState(() {
@@ -378,10 +377,12 @@ class _MainNavigationState extends State<MainNavigation> {
                     color: isLocked
                         ? Colors.white.withValues(alpha: 0.25)
                         : (isFinanceDisabled
-                            ? Colors.white.withValues(alpha: 0.15) // Redup/gelap
-                            : (isActive
-                                ? const Color(0xFFE27D00)
-                                : Colors.white.withValues(alpha: 0.45))),
+                              ? Colors.white.withValues(
+                                  alpha: 0.15,
+                                ) // Redup/gelap
+                              : (isActive
+                                    ? const Color(0xFFE27D00)
+                                    : Colors.white.withValues(alpha: 0.45))),
                     size: 24,
                   ),
                   const SizedBox(height: 4),
@@ -391,10 +392,12 @@ class _MainNavigationState extends State<MainNavigation> {
                       color: isLocked
                           ? Colors.white.withValues(alpha: 0.35)
                           : (isFinanceDisabled
-                              ? Colors.white.withValues(alpha: 0.25) // Redup/gelap
-                              : (isActive
-                                  ? const Color(0xFFE27D00)
-                                  : Colors.white.withValues(alpha: 0.65))),
+                                ? Colors.white.withValues(
+                                    alpha: 0.25,
+                                  ) // Redup/gelap
+                                : (isActive
+                                      ? const Color(0xFFE27D00)
+                                      : Colors.white.withValues(alpha: 0.65))),
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 1,
@@ -454,7 +457,10 @@ class _MainNavigationState extends State<MainNavigation> {
           final bottomPadding = MediaQuery.of(context).padding.bottom;
 
           _pillX = _pillX!.clamp(spacing4, size.width - 135 - spacing4);
-          _pillY = _pillY!.clamp(topPadding + spacing4, size.height - bottomPadding - 56 - spacing4);
+          _pillY = _pillY!.clamp(
+            topPadding + spacing4,
+            size.height - bottomPadding - 56 - spacing4,
+          );
         });
       },
       onPanEnd: (_) {
@@ -488,7 +494,6 @@ class _MainNavigationState extends State<MainNavigation> {
         });
       },
       child: ClipRRect(
-
         borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
@@ -541,7 +546,6 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
     );
   }
-
 }
 
 class _PulseDot extends StatefulWidget {
@@ -581,11 +585,7 @@ class _PulseDotState extends State<_PulseDot>
           color: Color(0xFF00C853),
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(
-              color: Color(0xFF00C853),
-              blurRadius: 4,
-              spreadRadius: 1,
-            ),
+            BoxShadow(color: Color(0xFF00C853), blurRadius: 4, spreadRadius: 1),
           ],
         ),
       ),

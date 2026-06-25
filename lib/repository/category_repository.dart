@@ -26,15 +26,37 @@ class CategoryRepository {
   }
 
   // Menambah kategori baru
-  Future<void> addCategory(String name, {String? adminId}) async {
+  Future<CategoryModel> addCategory(String name, {String? adminId}) async {
     try {
       final targetAdminId = adminId ?? _client.auth.currentUser?.id;
-      await _client.from('categories').insert({
+      final response = await _client.from('categories').insert({
         'name': name,
         'admin_id': targetAdminId,
-      });
+      }).select().single();
+      return CategoryModel.fromJson(response);
     } catch (e) {
       throw Exception('Gagal menambah kategori: $e');
+    }
+  }
+
+  // Menghapus kategori berdasarkan ID
+  Future<void> deleteCategory(String categoryId) async {
+    try {
+      await _client.from('categories').delete().eq('id', categoryId);
+    } catch (e) {
+      throw Exception('Gagal menghapus kategori: $e');
+    }
+  }
+
+  // Mengubah nama kategori
+  Future<void> updateCategory(String categoryId, String newName) async {
+    try {
+      await _client
+          .from('categories')
+          .update({'name': newName})
+          .eq('id', categoryId);
+    } catch (e) {
+      throw Exception('Gagal memperbarui kategori: $e');
     }
   }
 }

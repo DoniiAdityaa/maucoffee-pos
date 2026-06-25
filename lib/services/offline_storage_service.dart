@@ -115,4 +115,54 @@ class OfflineStorageService {
     final key = '$_queuePrefix$queueType';
     await prefs.remove(key);
   }
+
+  // ===========================================================================
+  // D. KELOMPOK FITUR: CACHE CATALOG & CATEGORIES (OFFLINE CACHING)
+  // ===========================================================================
+  static const String _productsCacheKey = "cached_products";
+  static const String _categoriesCacheKey = "cached_categories";
+
+  // Simpan cache produk
+  Future<void> saveProductsCache(List<Map<String, dynamic>> productsJson) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> stringList = productsJson.map((item) => json.encode(item)).toList();
+    await prefs.setStringList(_productsCacheKey, stringList);
+  }
+
+  // Ambil cache produk
+  Future<List<Map<String, dynamic>>> getProductsCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> list = prefs.getStringList(_productsCacheKey) ?? [];
+    return list.map((item) => json.decode(item) as Map<String, dynamic>).toList();
+  }
+
+  // Simpan cache kategori
+  Future<void> saveCategoriesCache(List<Map<String, dynamic>> categoriesJson) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> stringList = categoriesJson.map((item) => json.encode(item)).toList();
+    await prefs.setStringList(_categoriesCacheKey, stringList);
+  }
+
+  // Ambil cache kategori
+  Future<List<Map<String, dynamic>>> getCategoriesCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> list = prefs.getStringList(_categoriesCacheKey) ?? [];
+    return list.map((item) => json.decode(item) as Map<String, dynamic>).toList();
+  }
+
+  static const String _ingredientsCacheKey = "cached_ingredients";
+
+  // Simpan cache bahan baku
+  Future<void> saveIngredientsCache(List<Map<String, dynamic>> ingredientsJson) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> stringList = ingredientsJson.map((item) => json.encode(item)).toList();
+    await prefs.setStringList(_ingredientsCacheKey, stringList);
+  }
+
+  // Ambil cache bahan baku
+  Future<List<Map<String, dynamic>>> getIngredientsCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> list = prefs.getStringList(_ingredientsCacheKey) ?? [];
+    return list.map((item) => json.decode(item) as Map<String, dynamic>).toList();
+  }
 }
