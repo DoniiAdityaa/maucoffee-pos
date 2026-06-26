@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -10,24 +13,14 @@ import 'package:maucoffee/utility/rupiah_formatter.dart';
 import 'package:maucoffee/ui/widget_sharing/success_dialog.dart';
 import 'package:maucoffee/ui/widget_sharing/qris_payment_widget.dart';
 import 'package:maucoffee/data/history_manager.dart';
-
-class ProductDummy {
-  final String id;
-  final String name;
-  final String category;
-  final int stock;
-  final double price;
-  final bool isUnlimited;
-
-  const ProductDummy({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.stock,
-    required this.price,
-    this.isUnlimited = false,
-  });
-}
+import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_state.dart';
+import 'package:maucoffee/model/product_model.dart';
+import 'package:maucoffee/model/category_model.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/repository/order_repository.dart';
+import 'package:maucoffee/model/order_model.dart';
+import 'package:maucoffee/model/order_item_model.dart';
 
 class SalesTransactionScreen extends StatefulWidget {
   const SalesTransactionScreen({super.key});
@@ -37,9 +30,10 @@ class SalesTransactionScreen extends StatefulWidget {
 }
 
 class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
-  final List<String> _categories = ["Semua", "add on", "bahan", "bahan seblak"];
-  String _selectedCategory = "Semua";
+  String _selectedCategoryId = "Semua";
   String _searchQuery = "";
+  List<ProductModel> _loadedProducts = [];
+  List<CategoryModel> _loadedCategories = [];
 
   // Cart: Product ID -> Quantity
   final Map<String, int> _cart = {};
@@ -50,93 +44,30 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
     decimalDigits: 0,
   );
 
-  final List<ProductDummy> _products = const [
-    ProductDummy(
-      id: "1",
-      name: "Acar Wortel 200 gr",
-      category: "bahan",
-      stock: 11,
-      price: 4000,
-    ),
-    ProductDummy(
-      id: "2",
-      name: "Air mineral botol kecil 750 ml",
-      category: "add on",
-      stock: 17,
-      price: 5000,
-    ),
-    ProductDummy(
-      id: "3",
-      name: "Almond Crispy Cokelat",
-      category: "add on",
-      stock: 23,
-      price: 55000,
-    ),
-    ProductDummy(
-      id: "4",
-      name: "Almond Crispy Keju",
-      category: "add on",
-      stock: 20,
-      price: 55000,
-    ),
-    ProductDummy(
-      id: "5",
-      name: "Almond Crispy Matcha",
-      category: "add on",
-      stock: 38,
-      price: 55000,
-    ),
-    ProductDummy(
-      id: "6",
-      name: "Americano Ice 340 ml",
-      category: "add on",
-      stock: 999,
-      price: 20000,
-      isUnlimited: true,
-    ),
-    ProductDummy(
-      id: "7",
-      name: "Antis - Antiseptic Pembersih Tangan 55ml",
-      category: "add on",
-      stock: 10,
-      price: 14000,
-    ),
-    ProductDummy(
-      id: "8",
-      name: "Ayam Bakar 1 Ekor",
-      category: "bahan seblak",
-      stock: 999,
-      price: 45500,
-      isUnlimited: true,
-    ),
-    ProductDummy(
-      id: "9",
-      name: "Ayam Geprek 1 potong",
-      category: "bahan seblak",
-      stock: 15,
-      price: 18000,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CatalogCubit>().fetchCatalog();
+    });
+  }
 
-  void _addToCart(ProductDummy product) {
-    if (!product.isUnlimited && product.stock <= 0) {
-      CustomFeedback.showWarning(context, "Stok habis!");
-      return;
-    }
-
+  void _addToCart(ProductModel product) {
     final currentQty = _cart[product.id] ?? 0;
-    if (!product.isUnlimited && currentQty >= product.stock) {
+
+    // Jika stok diset lebih besar dari 0, batasi penjualan sampai batas stok
+    if (product.stock > 0 && currentQty >= product.stock) {
       CustomFeedback.showWarning(context, "Mencapai batas stok!");
       return;
     }
 
     HapticFeedback.lightImpact();
     setState(() {
-      _cart[product.id] = currentQty + 1;
+      _cart[product.id!] = currentQty + 1;
     });
   }
 
-  void _removeFromCart(ProductDummy product) {
+  void _removeFromCart(ProductModel product) {
     final currentQty = _cart[product.id] ?? 0;
     if (currentQty <= 0) return;
 
@@ -145,7 +76,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
       if (currentQty == 1) {
         _cart.remove(product.id);
       } else {
-        _cart[product.id] = currentQty - 1;
+        _cart[product.id!] = currentQty - 1;
       }
     });
   }
@@ -159,7 +90,11 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
   double _getCartTotal() {
     double total = 0;
     _cart.forEach((id, qty) {
-      final product = _products.firstWhere((p) => p.id == id);
+      final product = _loadedProducts.firstWhere(
+        (p) => p.id == id,
+        orElse: () =>
+            ProductModel(id: id, categoryId: '', name: 'Unknown', price: 0),
+      );
       total += product.price * qty;
     });
     return total;
@@ -169,67 +104,131 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    // Filtered products list based on search query and category filter
-    final filteredList = _products.where((product) {
-      final matchesCategory =
-          _selectedCategory == "Semua" || product.category == _selectedCategory;
-      final matchesSearch = product.name.toLowerCase().contains(
-        _searchQuery.toLowerCase(),
-      );
-      return matchesCategory && matchesSearch;
-    }).toList();
-
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeader(),
-                _buildSearchBar(),
-                _buildCategorySelector(),
-                Expanded(
-                  child: filteredList.isEmpty
-                      ? const Center(
-                          child: Text(
-                            "Menu tidak ditemukan",
-                            style: TextStyle(
-                              color: Colors.white60,
-                              fontSize: 16,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          physics: const BouncingScrollPhysics(),
-                          padding: EdgeInsets.only(
-                            left: spacing6,
-                            right: spacing6,
-                            top: spacing2,
-                            bottom:
-                                bottomPadding + 160, // Clear the checkout bar
-                          ),
-                          itemCount: filteredList.length,
-                          itemBuilder: (context, index) {
-                            final product = filteredList[index];
-                            return _buildProductListItem(product);
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
+      body: BlocBuilder<CatalogCubit, CatalogState>(
+        builder: (context, state) {
+          List<ProductModel> products = [];
+          List<CategoryModel> categories = [];
+          bool isLoading = false;
+          String errorMessage = "";
 
-          // Floating Checkout Bar
-          if (_cart.isNotEmpty)
-            Positioned(
-              left: spacing4,
-              right: spacing4,
-              bottom: (bottomPadding > 0 ? bottomPadding : spacing5) + 68,
-              child: _buildCheckoutBar(),
-            ),
-        ],
+          if (state is CatalogLoaded) {
+            products = state.products;
+            categories = state.categories;
+            _loadedProducts = products;
+            _loadedCategories = categories;
+          } else if (state is CatalogLoading) {
+            products = state.previousProducts ?? [];
+            categories = state.previousCategories ?? [];
+            _loadedProducts = products;
+            _loadedCategories = categories;
+            isLoading = products.isEmpty;
+          } else if (state is CatalogError) {
+            errorMessage = state.message;
+          }
+
+          if (isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(color: primaryColor),
+            );
+          }
+
+          if (errorMessage.isNotEmpty && products.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: Colors.redAccent,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    errorMessage,
+                    style: sMedium.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () =>
+                        context.read<CatalogCubit>().fetchCatalog(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                    ),
+                    child: Text(
+                      "Coba Lagi",
+                      style: sBold.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Filtered products list based on search query and category filter
+          final filteredList = products.where((product) {
+            final matchesCategory =
+                _selectedCategoryId == "Semua" ||
+                product.categoryId == _selectedCategoryId;
+            final matchesSearch = product.name.toLowerCase().contains(
+              _searchQuery.toLowerCase(),
+            );
+            return matchesCategory && matchesSearch;
+          }).toList();
+
+          return Stack(
+            children: [
+              SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeader(),
+                    _buildSearchBar(),
+                    _buildCategorySelector(categories),
+                    Expanded(
+                      child: filteredList.isEmpty
+                          ? const Center(
+                              child: Text(
+                                "Menu tidak ditemukan",
+                                style: TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              physics: const BouncingScrollPhysics(),
+                              padding: EdgeInsets.only(
+                                left: spacing6,
+                                right: spacing6,
+                                top: spacing2,
+                                bottom:
+                                    bottomPadding +
+                                    160, // Clear the checkout bar
+                              ),
+                              itemCount: filteredList.length,
+                              itemBuilder: (context, index) {
+                                final product = filteredList[index];
+                                return _buildProductListItem(product);
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Floating Checkout Bar
+              if (_cart.isNotEmpty)
+                Positioned(
+                  left: spacing4,
+                  right: spacing4,
+                  bottom: (bottomPadding > 0 ? bottomPadding : spacing5) + 68,
+                  child: _buildCheckoutBar(),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -291,22 +290,28 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
     );
   }
 
-  Widget _buildCategorySelector() {
+  Widget _buildCategorySelector(List<CategoryModel> categories) {
+    final List<dynamic> categoryItems = ["Semua", ...categories];
+
     return Container(
       height: 52,
       margin: const EdgeInsets.symmetric(vertical: spacing3),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: spacing6),
-        itemCount: _categories.length,
+        itemCount: categoryItems.length,
         itemBuilder: (context, index) {
-          final cat = _categories[index];
-          final bool isSelected = _selectedCategory == cat;
+          final item = categoryItems[index];
+          final String label =
+              item is String ? item : (item as CategoryModel).name;
+          final String id = item is String ? item : (item as CategoryModel).id!;
+
+          final bool isSelected = _selectedCategoryId == id;
           return Padding(
             padding: const EdgeInsets.only(right: spacing3),
             child: ChoiceChip(
               label: Text(
-                cat,
+                label,
                 style: sMedium.copyWith(
                   color: isSelected ? Colors.white : Colors.white60,
                 ),
@@ -316,7 +321,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
               backgroundColor: const Color(0xFF2A1A0A).withOpacity(0.50),
               onSelected: (_) {
                 setState(() {
-                  _selectedCategory = cat;
+                  _selectedCategoryId = id;
                 });
               },
               shape: RoundedRectangleBorder(
@@ -336,19 +341,24 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
     );
   }
 
-  Widget _buildProductListItem(ProductDummy product) {
+  Widget _buildProductListItem(ProductModel product) {
     final int cartQty = _cart[product.id] ?? 0;
-    final bool hasStock = product.isUnlimited || product.stock > 0;
-    final String stockText = product.isUnlimited
-        ? "Unlimited"
-        : "Sisa ${product.stock}";
+    final bool isCartFull = product.stock > 0 && cartQty >= product.stock;
+
+    final category = _loadedCategories.firstWhere(
+      (c) => c.id == product.categoryId,
+      orElse: () => CategoryModel(name: 'General'),
+    );
+    final String categoryName = category.name.toLowerCase();
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: GestureDetector(
         onTap: () {
           HapticFeedback.lightImpact();
-          hasStock ? _addToCart(product) : null;
+          if (!isCartFull) {
+            _addToCart(product);
+          }
         },
         child: Container(
           margin: const EdgeInsets.only(bottom: spacing3),
@@ -377,12 +387,39 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                     ),
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    product.name.isNotEmpty
-                        ? product.name[0].toUpperCase()
-                        : "",
-                    style: lgBold.copyWith(color: primaryColor),
-                  ),
+                  child: product.imageUrl != null &&
+                          product.imageUrl!.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CachedNetworkImage(
+                            imageUrl: product.imageUrl!,
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: primaryColor,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Text(
+                              product.name.isNotEmpty
+                                  ? product.name[0].toUpperCase()
+                                  : "",
+                              style: lgBold.copyWith(color: primaryColor),
+                            ),
+                          ),
+                        )
+                      : Text(
+                          product.name.isNotEmpty
+                              ? product.name[0].toUpperCase()
+                              : "",
+                          style: lgBold.copyWith(color: primaryColor),
+                        ),
                 ),
                 const SizedBox(width: spacing4),
 
@@ -399,9 +436,10 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "$stockText • ${currencyFormatter.format(product.price)}",
+                        "$categoryName • ${currencyFormatter.format(product.price)}",
                         style: xsMedium.copyWith(
-                          color: hasStock ? Colors.white60 : Colors.redAccent,
+                          color:
+                              isCartFull ? Colors.redAccent : Colors.white60,
                         ),
                       ),
                     ],
@@ -432,12 +470,12 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                 IconButton(
                   icon: Icon(
                     Icons.add_circle_rounded,
-                    color: hasStock
-                        ? primaryColor
-                        : Colors.grey.withOpacity(0.5),
+                    color: isCartFull
+                        ? Colors.grey.withOpacity(0.5)
+                        : primaryColor,
                     size: 28,
                   ),
-                  onPressed: hasStock ? () => _addToCart(product) : null,
+                  onPressed: isCartFull ? null : () => _addToCart(product),
                   constraints: const BoxConstraints(),
                   padding: EdgeInsets.zero,
                 ),
@@ -596,8 +634,14 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                           itemBuilder: (context, index) {
                             final id = _cart.keys.elementAt(index);
                             final qty = _cart[id]!;
-                            final product = _products.firstWhere(
+                            final product = _loadedProducts.firstWhere(
                               (p) => p.id == id,
+                              orElse: () => ProductModel(
+                                id: id,
+                                categoryId: '',
+                                name: 'Unknown',
+                                price: 0,
+                              ),
                             );
 
                             return Padding(
@@ -1043,49 +1087,120 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
     );
   }
 
-  void _processCheckout(
+  Future<void> _processCheckout(
     String method, {
     double paidAmount = 0.0,
     double change = 0.0,
     String customerName = "Pelanggan Umum",
     String? qrisProofPath,
-  }) {
+  }) async {
     final String trxNum =
         "TRX-${10000 + (DateTime.now().millisecond * 7) % 90000}";
 
-    // Simpan data transaksi ke HistoryManager sebelum keranjang di-clear
-    final List<TransactionItem> txItems = [];
-    _cart.forEach((id, qty) {
-      final product = _products.firstWhere((p) => p.id == id);
-      txItems.add(
-        TransactionItem(name: product.name, qty: qty, price: product.price),
-      );
-    });
-
-    HistoryManager().addTransaction(
-      TransactionHistory(
-        id: trxNum,
-        customerName: customerName,
-        dateTime: DateTime.now(),
-        totalAmount: _getCartTotal(),
-        paymentMethod: method,
-        items: txItems,
-        paidAmount: paidAmount,
-        changeAmount: change,
-        qrisProofPath: qrisProofPath,
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: primaryColor),
       ),
     );
 
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) =>
-          TransactionSuccessDialog(transactionNumber: trxNum, onFinish: () {}),
-    ).then((_) {
-      setState(() {
-        _cart.clear();
+    try {
+      String? qrisProofUrl;
+      // Upload bukti QRIS jika menggunakan QRIS dan ada path gambarnya
+      if (method == "QRIS" && qrisProofPath != null && qrisProofPath.isNotEmpty) {
+        final file = File(qrisProofPath);
+        final fileName = "qris_${trxNum}_${DateTime.now().millisecondsSinceEpoch}.jpg";
+        qrisProofUrl = await serviceLocator<OrderRepository>().uploadQrisProof(file, fileName);
+      }
+
+      // Hitung total belanja
+      final double totalVal = _getCartTotal();
+
+      // Buat OrderModel
+      final order = OrderModel(
+        invoiceNumber: trxNum,
+        totalAmount: totalVal,
+        paymentMethod: method,
+        amountPaid: method == "QRIS" ? totalVal : paidAmount,
+        change: method == "QRIS" ? 0.0 : change,
+        qrisProofUrl: qrisProofUrl,
+      );
+
+      // Buat List OrderItemModel
+      final List<OrderItemModel> items = [];
+      _cart.forEach((id, qty) {
+        final product = _loadedProducts.firstWhere(
+          (p) => p.id == id,
+          orElse: () =>
+              ProductModel(id: id, categoryId: '', name: 'Unknown', price: 0),
+        );
+        items.add(OrderItemModel(
+          orderId: '', // Akan diset oleh OrderRepository
+          productId: id,
+          quantity: qty,
+          price: product.price,
+        ));
       });
-    });
+
+      // Simpan ke Supabase database
+      await serviceLocator<OrderRepository>().createOrder(order: order, items: items);
+
+      // Simpan data transaksi ke local HistoryManager agar visualisasi Histori & Keuangan sinkron secara lokal
+      final List<TransactionItem> txItems = [];
+      _cart.forEach((id, qty) {
+        final product = _loadedProducts.firstWhere(
+          (p) => p.id == id,
+          orElse: () =>
+              ProductModel(id: id, categoryId: '', name: 'Unknown', price: 0),
+        );
+        txItems.add(
+          TransactionItem(name: product.name, qty: qty, price: product.price),
+        );
+      });
+
+      HistoryManager().addTransaction(
+        TransactionHistory(
+          id: trxNum,
+          customerName: customerName,
+          dateTime: DateTime.now(),
+          totalAmount: totalVal,
+          paymentMethod: method,
+          items: txItems,
+          paidAmount: method == "QRIS" ? totalVal : paidAmount,
+          changeAmount: method == "QRIS" ? 0.0 : change,
+          qrisProofPath: qrisProofPath,
+        ),
+      );
+
+      if (mounted) {
+        Navigator.pop(context); // Tutup loading dialog
+      }
+
+      // Tampilkan dialog sukses
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) =>
+              TransactionSuccessDialog(transactionNumber: trxNum, onFinish: () {}),
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _cart.clear();
+            });
+            // Refresh Catalog State
+            context.read<CatalogCubit>().fetchCatalog();
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Tutup loading dialog
+        CustomFeedback.showError(context, "Transaksi gagal: ${e.toString()}");
+      }
+    }
   }
 
   List<double> _getSuggestions(double totalPrice) {

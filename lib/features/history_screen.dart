@@ -1,14 +1,22 @@
-import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:maucoffee/data/history_manager.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
+import 'package:maucoffee/repository/order_repository.dart';
+import 'package:maucoffee/repository/ingredient_repository.dart';
+import 'package:maucoffee/model/order_model.dart';
+import 'package:maucoffee/model/order_item_model.dart';
+import 'package:maucoffee/model/stock_log_model.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_state.dart';
+import 'package:maucoffee/model/product_model.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -21,6 +29,15 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
   late TabController _tabController;
   final Map<String, bool> _expandedTransactions = {};
   DateTime _selectedDate = DateTime.now();
+
+  List<OrderModel> _orders = [];
+  List<StockLogModel> _stockLogs = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  // Cache detail item transaksi: order_id -> list item
+  final Map<String, List<OrderItemModel>> _orderItemsCache = {};
+  final Map<String, bool> _loadingOrderItems = {};
 
   bool get _isAdmin {
     final userPrefs = serviceLocator<UserPreference>();
@@ -64,12 +81,74 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CatalogCubit>().fetchCatalog();
+      _fetchHistoryData();
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchHistoryData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final orderRepo = serviceLocator<OrderRepository>();
+      final ingredientRepo = serviceLocator<IngredientRepository>();
+
+      // Muat data orders & stock logs secara paralel
+      final results = await Future.wait([
+        orderRepo.getOrderHistory(),
+        ingredientRepo.getStockLogs(),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _orders = results[0] as List<OrderModel>;
+        _stockLogs = results[1] as List<StockLogModel>;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadOrderItems(String orderId) async {
+    if (_orderItemsCache.containsKey(orderId) || (_loadingOrderItems[orderId] ?? false)) {
+      return;
+    }
+
+    setState(() {
+      _loadingOrderItems[orderId] = true;
+    });
+
+    try {
+      final orderRepo = serviceLocator<OrderRepository>();
+      final items = await orderRepo.getOrderItems(orderId);
+      if (!mounted) return;
+      setState(() {
+        _orderItemsCache[orderId] = items;
+        _loadingOrderItems[orderId] = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingOrderItems[orderId] = false;
+      });
+      debugPrint("Gagal memuat detail item: $e");
+    }
   }
 
   Widget _buildDateSelector() {
@@ -86,6 +165,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
               setState(() {
                 _selectedDate = _selectedDate.subtract(const Duration(days: 1));
               });
+              _fetchHistoryData();
             },
             child: Container(
               padding: const EdgeInsets.all(spacing2),
@@ -133,6 +213,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                 setState(() {
                   _selectedDate = picked;
                 });
+                _fetchHistoryData();
               }
             },
             child: Container(
@@ -177,6 +258,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                     setState(() {
                       _selectedDate = _selectedDate.add(const Duration(days: 1));
                     });
+                    _fetchHistoryData();
                   }
                 : null,
             child: Container(
@@ -202,25 +284,29 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     );
   }
 
-  // Menghitung statistik dinamis dari HistoryManager
+  // Menghitung statistik dinamis dari database orders & stock logs
   Map<String, double> _calculateStats() {
     double totalRevenueToday = 0;
     final targetDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     
     int txCount = 0;
-    for (var tx in HistoryManager().transactions) {
-      final txDate = DateTime(tx.dateTime.year, tx.dateTime.month, tx.dateTime.day);
-      if (txDate.isAtSameMomentAs(targetDate)) {
-        totalRevenueToday += tx.totalAmount;
-        txCount++;
+    for (var tx in _orders) {
+      if (tx.createdAt != null) {
+        final txDate = DateTime(tx.createdAt!.year, tx.createdAt!.month, tx.createdAt!.day);
+        if (txDate.isAtSameMomentAs(targetDate)) {
+          totalRevenueToday += tx.totalAmount;
+          txCount++;
+        }
       }
     }
     
     int logCount = 0;
-    for (var log in HistoryManager().stockLogs) {
-      final logDate = DateTime(log.dateTime.year, log.dateTime.month, log.dateTime.day);
-      if (logDate.isAtSameMomentAs(targetDate)) {
-        logCount++;
+    for (var log in _stockLogs) {
+      if (log.createdAt != null) {
+        final logDate = DateTime(log.createdAt!.year, log.createdAt!.month, log.createdAt!.day);
+        if (logDate.isAtSameMomentAs(targetDate)) {
+          logCount++;
+        }
       }
     }
 
@@ -317,14 +403,18 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
             ),
             const SizedBox(height: spacing4),
 
-            // Tab View
+            // Tab View dengan RefreshIndicator untuk Pull-to-refresh
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildTransactionTab(),
-                  _buildStockLogTab(),
-                ],
+              child: RefreshIndicator(
+                color: primaryColor,
+                onRefresh: _fetchHistoryData,
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildTransactionTab(),
+                    _buildStockLogTab(),
+                  ],
+                ),
               ),
             ),
           ],
@@ -372,16 +462,35 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
   // ── TAB 1: RIWAYAT TRANSAKSI PENJUALAN ──
   Widget _buildTransactionTab() {
     final targetDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final transactions = HistoryManager().transactions.where((tx) {
-      final txDate = DateTime(tx.dateTime.year, tx.dateTime.month, tx.dateTime.day);
+    final transactions = _orders.where((tx) {
+      if (tx.createdAt == null) return false;
+      final txDate = DateTime(tx.createdAt!.year, tx.createdAt!.month, tx.createdAt!.day);
       return txDate.isAtSameMomentAs(targetDate);
     }).toList();
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: primaryColor));
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 36),
+            const SizedBox(height: 8),
+            Text("Gagal memuat: $_errorMessage", style: sMedium.copyWith(color: Colors.white70)),
+          ],
+        ),
+      );
+    }
 
     if (transactions.isEmpty) {
       return _buildEmptyState("Belum ada riwayat transaksi penjualan.");
     }
 
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(left: spacing6, right: spacing6, bottom: 100),
       itemCount: transactions.length,
       itemBuilder: (context, index) {
@@ -406,8 +515,11 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                 onTap: () {
                   HapticFeedback.lightImpact();
                   setState(() {
-                    _expandedTransactions[tx.id] = !isExpanded;
+                    _expandedTransactions[tx.id!] = !isExpanded;
                   });
+                  if (!isExpanded) {
+                    _loadOrderItems(tx.id!);
+                  }
                 },
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
@@ -422,7 +534,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                             Row(
                               children: [
                                 Text(
-                                  tx.id,
+                                  tx.invoiceNumber,
                                   style: sBold.copyWith(color: Colors.white),
                                 ),
                                 const SizedBox(width: 8),
@@ -452,14 +564,16 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              "Pembeli: ${tx.customerName}",
+                              "Metode: ${tx.paymentMethod}",
                               style: xsMedium.copyWith(color: Colors.white70),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              dateFormatter.format(tx.dateTime),
-                              style: xxsRegular.copyWith(color: Colors.white38),
-                            ),
+                            if (tx.createdAt != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                dateFormatter.format(tx.createdAt!),
+                                style: xxsRegular.copyWith(color: Colors.white38),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -496,33 +610,17 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // List Item Belanjaan
-                      ...tx.items.map((item) => Padding(
-                            padding: const EdgeInsets.only(bottom: spacing2),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    "${item.name} (x${item.qty})",
-                                    style: xsMedium.copyWith(color: Colors.white70),
-                                  ),
-                                ),
-                                Text(
-                                  currencyFormatter.format(item.price * item.qty),
-                                  style: xsBold.copyWith(color: Colors.white),
-                                ),
-                              ],
-                            ),
-                          )),
+                      _buildOrderItemsSection(tx.id!),
+                      
                       const SizedBox(height: spacing2),
                       const Divider(color: Colors.white10),
                       const SizedBox(height: spacing2),
 
                       // Rincian Pembayaran
                       if (tx.paymentMethod == "Cash") ...[
-                        _buildDetailRow("Jumlah Bayar", currencyFormatter.format(tx.paidAmount)),
+                        _buildDetailRow("Jumlah Bayar", currencyFormatter.format(tx.amountPaid)),
                         const SizedBox(height: 4),
-                        _buildDetailRow("Kembalian", currencyFormatter.format(tx.changeAmount)),
+                        _buildDetailRow("Kembalian", currencyFormatter.format(tx.change)),
                       ],
 
                       // Bukti Transfer QRIS
@@ -533,9 +631,9 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                           style: xxsBold.copyWith(color: Colors.white54),
                         ),
                         const SizedBox(height: spacing2),
-                        if (tx.qrisProofPath != null && tx.qrisProofPath!.isNotEmpty)
+                        if (tx.qrisProofUrl != null && tx.qrisProofUrl!.isNotEmpty)
                           GestureDetector(
-                            onTap: () => _showFullImageDialog(context, tx.qrisProofPath!),
+                            onTap: () => _showFullImageDialog(context, tx.qrisProofUrl!),
                             child: MouseRegion(
                               cursor: SystemMouseCursors.click,
                               child: ClipRRect(
@@ -543,20 +641,25 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                                 child: Stack(
                                   alignment: Alignment.bottomRight,
                                   children: [
-                                    Image.file(
-                                      File(tx.qrisProofPath!),
-                                      height: 150,
+                                    CachedNetworkImage(
+                                      imageUrl: tx.qrisProofUrl!,
+                                      height: 200,
                                       width: double.infinity,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return _buildImageErrorPlaceholder();
-                                      },
+                                      placeholder: (context, url) => const Center(
+                                        child: SizedBox(
+                                          width: 30,
+                                          height: 30,
+                                          child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) => _buildImageErrorPlaceholder(),
                                     ),
                                     Container(
                                       padding: const EdgeInsets.all(6),
                                       margin: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.6),
+                                        color: Colors.black.withOpacity(0.6),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: const Row(
@@ -595,6 +698,62 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
           ),
         );
       },
+    );
+  }
+
+  Widget _buildOrderItemsSection(String orderId) {
+    if (_loadingOrderItems[orderId] ?? false) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8.0),
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final items = _orderItemsCache[orderId];
+    if (items == null || items.isEmpty) {
+      return Text(
+        "Tidak ada detail item.",
+        style: xsMedium.copyWith(color: Colors.white38),
+      );
+    }
+
+    final products = context.read<CatalogCubit>().state is CatalogLoaded
+        ? (context.read<CatalogCubit>().state as CatalogLoaded).products
+        : <ProductModel>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: items.map((item) {
+        final product = products.firstWhere(
+          (p) => p.id == item.productId,
+          orElse: () => ProductModel(name: "Produk Tidak Dikenal", price: item.price, categoryId: ""),
+        );
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: spacing2),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  "${product.name} (x${item.quantity})",
+                  style: xsMedium.copyWith(color: Colors.white70),
+                ),
+              ),
+              Text(
+                currencyFormatter.format(item.price * item.quantity),
+                style: xsBold.copyWith(color: Colors.white),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -639,20 +798,39 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
   // ── TAB 2: RIWAYAT LOG STOK BAHAN BAKU ──
   Widget _buildStockLogTab() {
     final targetDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final stockLogs = HistoryManager().stockLogs.where((log) {
-      final logDate = DateTime(log.dateTime.year, log.dateTime.month, log.dateTime.day);
+    final logs = _stockLogs.where((log) {
+      if (log.createdAt == null) return false;
+      final logDate = DateTime(log.createdAt!.year, log.createdAt!.month, log.createdAt!.day);
       return logDate.isAtSameMomentAs(targetDate);
     }).toList();
 
-    if (stockLogs.isEmpty) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: primaryColor));
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 36),
+            const SizedBox(height: 8),
+            Text("Gagal memuat: $_errorMessage", style: sMedium.copyWith(color: Colors.white70)),
+          ],
+        ),
+      );
+    }
+
+    if (logs.isEmpty) {
       return _buildEmptyState("Belum ada log penyesuaian stok bahan.");
     }
 
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(left: spacing6, right: spacing6, bottom: 100),
-      itemCount: stockLogs.length,
+      itemCount: logs.length,
       itemBuilder: (context, index) {
-        final log = stockLogs[index];
+        final log = logs[index];
 
         Color statusColor;
         IconData logIcon;
@@ -716,11 +894,13 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                             style: xxxsMedium.copyWith(color: Colors.white60),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          dateFormatter.format(log.dateTime),
-                          style: xxsRegular.copyWith(color: Colors.white30),
-                        ),
+                        if (log.createdAt != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            dateFormatter.format(log.createdAt!),
+                            style: xxsRegular.copyWith(color: Colors.white30),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -779,7 +959,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     );
   }
 
-  void _showFullImageDialog(BuildContext context, String imagePath) {
+  void _showFullImageDialog(BuildContext context, String imageUrl) {
     HapticFeedback.lightImpact();
     showDialog(
       context: context,
@@ -809,9 +989,13 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                   panEnabled: true,
                   minScale: 0.5,
                   maxScale: 4.0,
-                  child: Image.file(
-                    File(imagePath),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
                     fit: BoxFit.contain,
+                    placeholder: (context, url) => const Center(
+                      child: CircularProgressIndicator(color: primaryColor),
+                    ),
+                    errorWidget: (context, url, error) => _buildImageErrorPlaceholder(),
                   ),
                 ),
               ),

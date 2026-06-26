@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/model/ingredient_model.dart';
+import 'package:maucoffee/model/stock_log_model.dart';
 
 class IngredientRepository {
   final _client = Supabase.instance.client;
@@ -69,6 +71,44 @@ class IngredientRepository {
       await _client.from('ingredients').delete().eq('id', id);
     } catch (e) {
       throw Exception('Gagal menghapus bahan baku: $e');
+    }
+  }
+
+  // Menambahkan log penyesuaian stok baru
+  Future<void> addStockLog(StockLogModel log) async {
+    try {
+      final json = log.toJson();
+      json.remove('id');
+      json.remove('created_at');
+      json['admin_id'] ??= _client.auth.currentUser?.id;
+
+      await _client.from('stock_logs').insert(json);
+    } catch (e) {
+      // Supaya tangguh jika tabel stock_logs belum di-create oleh user di dashboard
+      debugPrint('Gagal mencatat log stok ke Supabase: $e');
+    }
+  }
+
+  // Mengambil daftar log penyesuaian stok dari Supabase
+  Future<List<StockLogModel>> getStockLogs({String? adminId}) async {
+    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    if (targetAdminId == null || targetAdminId.isEmpty) {
+      return [];
+    }
+    try {
+      final response = await _client
+          .from('stock_logs')
+          .select()
+          .eq('admin_id', targetAdminId)
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((json) => StockLogModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint('Gagal memuat log stok dari Supabase: $e');
+      // Kembalikan empty list agar tidak crash
+      return [];
     }
   }
 }

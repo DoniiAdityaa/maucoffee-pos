@@ -178,7 +178,7 @@ class _QrisPaymentBottomSheetState extends State<QrisPaymentBottomSheet> {
 
               // Bukti Pembayaran Title
               Text(
-                "Upload Bukti Pembayaran (Opsional)",
+                "Upload Bukti Pembayaran (Wajib)",
                 style: xsBold.copyWith(color: Colors.white70),
               ),
               const SizedBox(height: spacing3),
@@ -296,11 +296,13 @@ class _QrisPaymentBottomSheetState extends State<QrisPaymentBottomSheet> {
 
               // Button Selesaikan Pembayaran
               ElevatedButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  Navigator.pop(context); // Close QRIS bottom sheet
-                  widget.onConfirm(_imageFile?.path);
-                },
+                onPressed: _imageFile == null
+                    ? null
+                    : () {
+                        HapticFeedback.mediumImpact();
+                        Navigator.pop(context); // Close QRIS bottom sheet
+                        widget.onConfirm(_imageFile!.path);
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   padding: const EdgeInsets.symmetric(vertical: spacing4),

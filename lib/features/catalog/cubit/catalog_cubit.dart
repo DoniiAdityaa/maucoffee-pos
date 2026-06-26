@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:maucoffee/model/category_model.dart';
 import 'package:maucoffee/model/product_model.dart';
 import 'package:maucoffee/model/ingredient_model.dart';
+import 'package:maucoffee/model/stock_log_model.dart';
 import 'package:maucoffee/repository/category_repository.dart';
 import 'package:maucoffee/repository/product_repository.dart';
 import 'package:maucoffee/repository/ingredient_repository.dart';
@@ -227,6 +228,18 @@ class CatalogCubit extends Cubit<CatalogState> {
         minStock: minStock,
       );
       await _ingredientRepository.addIngredient(newItem);
+
+      // Catat log stok ke Supabase
+      final log = StockLogModel(
+        ingredientName: name,
+        category: category,
+        adjustedAmount: stock,
+        stockBefore: 0.0,
+        stockAfter: stock,
+        type: "Baru",
+      );
+      await _ingredientRepository.addStockLog(log);
+
       await fetchCatalog();
     } catch (e) {
       emit(CatalogError("Gagal menambahkan bahan baku: $e"));
@@ -242,6 +255,16 @@ class CatalogCubit extends Cubit<CatalogState> {
     required String unit,
     required double minStock,
   }) async {
+    double stockBefore = 0.0;
+    final current = state;
+    if (current is CatalogLoaded) {
+      final oldItem = current.ingredients.firstWhere(
+        (i) => i.id == id,
+        orElse: () => IngredientModel(name: name, category: category),
+      );
+      stockBefore = oldItem.stock;
+    }
+
     _emitLoading();
     try {
       final updatedItem = IngredientModel(
@@ -253,6 +276,20 @@ class CatalogCubit extends Cubit<CatalogState> {
         minStock: minStock,
       );
       await _ingredientRepository.updateIngredient(updatedItem);
+
+      // Catat log stok ke Supabase jika nominalnya berubah
+      if (stock != stockBefore) {
+        final log = StockLogModel(
+          ingredientName: name,
+          category: category,
+          adjustedAmount: (stock - stockBefore).abs(),
+          stockBefore: stockBefore,
+          stockAfter: stock,
+          type: stock > stockBefore ? "Tambah" : "Kurang",
+        );
+        await _ingredientRepository.addStockLog(log);
+      }
+
       await fetchCatalog();
     } catch (e) {
       emit(CatalogError("Gagal memperbarui bahan baku: $e"));

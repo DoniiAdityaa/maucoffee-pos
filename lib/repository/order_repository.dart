@@ -90,22 +90,7 @@ class OrderRepository {
         // Simpan detail item pesanan
         await _client.from('order_items').insert(itemJson);
 
-        // Potong stok barang di tabel products
-        // Dapatkan data produk untuk cek stok saat ini
-        final productResponse = await _client
-            .from('products')
-            .select('stock')
-            .eq('id', item.productId)
-            .single();
-
-        final currentStock = productResponse['stock'] as int;
-        final newStock = currentStock - item.quantity;
-
-        // Update stok baru
-        await _client
-            .from('products')
-            .update({'stock': newStock})
-            .eq('id', item.productId);
+        // Potong stok barang di tabel products dinonaktifkan (stok unlimited)
       }
     } catch (e) {
       throw Exception('Gagal memproses transaksi: $e');

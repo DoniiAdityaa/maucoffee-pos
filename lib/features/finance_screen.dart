@@ -10,6 +10,9 @@ import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
+import 'package:maucoffee/repository/order_repository.dart';
+import 'package:maucoffee/repository/expense_repository.dart';
+import 'package:maucoffee/model/order_model.dart';
 
 class FinanceScreen extends StatefulWidget {
   const FinanceScreen({super.key});
@@ -36,6 +39,43 @@ class _FinanceScreenState extends State<FinanceScreen>
   DateTime _selectedDate = DateTime.now();
   int _activeTabIndex = 0;
 
+  List<OrderModel> _orders = [];
+  List<ExpenseModel> _expenses = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  Future<void> _fetchFinanceData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final orderRepo = serviceLocator<OrderRepository>();
+      final expenseRepo = serviceLocator<ExpenseRepository>();
+
+      // Muat data orders & expenses secara paralel dari database Supabase
+      final results = await Future.wait([
+        orderRepo.getOrderHistory(),
+        expenseRepo.getExpenses(),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _orders = results[0] as List<OrderModel>;
+        _expenses = results[1] as List<ExpenseModel>;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +93,9 @@ class _FinanceScreenState extends State<FinanceScreen>
         }
       }
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchFinanceData();
+    });
   }
 
   @override
@@ -67,17 +110,17 @@ class _FinanceScreenState extends State<FinanceScreen>
     return itemDate.isAtSameMomentAs(target);
   }
 
-  // Menghitung akumulasi statistik keuangan
+  // Menghitung akumulasi statistik keuangan dari database Supabase
   Map<String, double> _calculateFinanceStats() {
     double totalIncome = 0;
-    for (var tx in HistoryManager().transactions) {
-      if (_isWithinDateRange(tx.dateTime)) {
+    for (var tx in _orders) {
+      if (tx.createdAt != null && _isWithinDateRange(tx.createdAt!)) {
         totalIncome += tx.totalAmount;
       }
     }
 
     double totalExpenses = 0;
-    for (var exp in HistoryManager().expenses) {
+    for (var exp in _expenses) {
       if (exp.createdAt != null && _isWithinDateRange(exp.createdAt!)) {
         totalExpenses += exp.amount;
       }
@@ -166,6 +209,7 @@ class _FinanceScreenState extends State<FinanceScreen>
               setState(() {
                 _selectedDate = _selectedDate.subtract(const Duration(days: 1));
               });
+              _fetchFinanceData();
             },
             child: Container(
               padding: const EdgeInsets.all(spacing2),
@@ -213,6 +257,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 setState(() {
                   _selectedDate = picked;
                 });
+                _fetchFinanceData();
               }
             },
             child: Container(
@@ -257,6 +302,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                     setState(() {
                       _selectedDate = _selectedDate.add(const Duration(days: 1));
                     });
+                    _fetchFinanceData();
                   }
                 : null,
             child: Container(
@@ -1292,11 +1338,15 @@ class _FinanceScreenState extends State<FinanceScreen>
             ),
             const SizedBox(height: spacing4),
 
-            // Tab View Area
+            // Tab View Area dengan RefreshIndicator untuk Pull-to-refresh
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [_buildExpensesTab(), _buildIncomeTab()],
+              child: RefreshIndicator(
+                color: primaryColor,
+                onRefresh: _fetchFinanceData,
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [_buildExpensesTab(), _buildIncomeTab()],
+                ),
               ),
             ),
           ],
@@ -1307,9 +1357,26 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   // ── TAB 1: DAFTAR LOG PENGELUARAN ──
   Widget _buildExpensesTab() {
-    final expensesList = HistoryManager().expenses.where((exp) {
+    final expensesList = _expenses.where((exp) {
       return exp.createdAt != null && _isWithinDateRange(exp.createdAt!);
     }).toList();
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: primaryColor));
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(spacing6),
+          child: Text(
+            "Gagal memuat: $_errorMessage",
+            style: sMedium.copyWith(color: Colors.white70),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
 
     if (expensesList.isEmpty) {
       return _buildEmptyState(
@@ -1319,6 +1386,7 @@ class _FinanceScreenState extends State<FinanceScreen>
     }
 
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(
         left: spacing6,
         right: spacing6,
@@ -1395,13 +1463,13 @@ class _FinanceScreenState extends State<FinanceScreen>
                                 style: xxxsBold.copyWith(color: categoryColor),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              exp.createdAt != null
-                                  ? dateFormatter.format(exp.createdAt!)
-                                  : "Baru saja",
-                              style: xxsRegular.copyWith(color: Colors.white30),
-                            ),
+                            if (exp.createdAt != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                dateFormatter.format(exp.createdAt!),
+                                style: xxsRegular.copyWith(color: Colors.white30),
+                              ),
+                            ],
                           ],
                         ),
                       ],
@@ -1444,9 +1512,26 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   // ── TAB 2: DAFTAR LOG PEMASUKAN PENJUALAN ──
   Widget _buildIncomeTab() {
-    final transactions = HistoryManager().transactions.where((tx) {
-      return _isWithinDateRange(tx.dateTime);
+    final transactions = _orders.where((tx) {
+      return tx.createdAt != null && _isWithinDateRange(tx.createdAt!);
     }).toList();
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: primaryColor));
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(spacing6),
+          child: Text(
+            "Gagal memuat: $_errorMessage",
+            style: sMedium.copyWith(color: Colors.white70),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
 
     if (transactions.isEmpty) {
       return _buildEmptyState(
@@ -1456,6 +1541,7 @@ class _FinanceScreenState extends State<FinanceScreen>
     }
 
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(
         left: spacing6,
         right: spacing6,
@@ -1480,7 +1566,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(tx.id, style: sBold.copyWith(color: Colors.white)),
+                    Text(tx.invoiceNumber, style: sBold.copyWith(color: Colors.white)),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -1509,16 +1595,18 @@ class _FinanceScreenState extends State<FinanceScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          dateFormatter.format(tx.dateTime),
-                          style: xxsRegular.copyWith(color: Colors.white30),
-                        ),
+                        if (tx.createdAt != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            dateFormatter.format(tx.createdAt!),
+                            style: xxsRegular.copyWith(color: Colors.white30),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Pembeli: ${tx.customerName}",
+                      "Invoice: ${tx.invoiceNumber}",
                       style: xxsMedium.copyWith(color: Colors.white60),
                     ),
                   ],
