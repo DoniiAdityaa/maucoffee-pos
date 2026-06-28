@@ -7,6 +7,9 @@ import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
+import 'package:maucoffee/auth/role_selector_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -326,9 +329,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onPressed: () {
                       Navigator.pop(ctx);
                       HapticFeedback.heavyImpact();
-                      CustomFeedback.showInfo(
+                      
+                      final prefs = serviceLocator<UserPreference>();
+                      prefs.clearData();
+
+                      Navigator.pushAndRemoveUntil(
                         context,
-                        "Logout berhasil! (Simulasi kembali ke layar Login)",
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) =>
+                              const RoleSelectorScreen(),
+                          transitionDuration: const Duration(milliseconds: 400),
+                          transitionsBuilder: (
+                            context,
+                            animation,
+                            secondaryAnimation,
+                            child,
+                          ) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                        ),
+                        (route) => false,
                       );
                     },
                     style: ElevatedButton.styleFrom(

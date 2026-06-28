@@ -12,7 +12,6 @@ import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 import 'package:maucoffee/utility/rupiah_formatter.dart';
 import 'package:maucoffee/ui/widget_sharing/success_dialog.dart';
 import 'package:maucoffee/ui/widget_sharing/qris_payment_widget.dart';
-import 'package:maucoffee/data/history_manager.dart';
 import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
 import 'package:maucoffee/features/catalog/cubit/catalog_state.dart';
 import 'package:maucoffee/model/product_model.dart';
@@ -1146,33 +1145,6 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
 
       // Simpan ke Supabase database
       await serviceLocator<OrderRepository>().createOrder(order: order, items: items);
-
-      // Simpan data transaksi ke local HistoryManager agar visualisasi Histori & Keuangan sinkron secara lokal
-      final List<TransactionItem> txItems = [];
-      _cart.forEach((id, qty) {
-        final product = _loadedProducts.firstWhere(
-          (p) => p.id == id,
-          orElse: () =>
-              ProductModel(id: id, categoryId: '', name: 'Unknown', price: 0),
-        );
-        txItems.add(
-          TransactionItem(name: product.name, qty: qty, price: product.price),
-        );
-      });
-
-      HistoryManager().addTransaction(
-        TransactionHistory(
-          id: trxNum,
-          customerName: customerName,
-          dateTime: DateTime.now(),
-          totalAmount: totalVal,
-          paymentMethod: method,
-          items: txItems,
-          paidAmount: method == "QRIS" ? totalVal : paidAmount,
-          changeAmount: method == "QRIS" ? 0.0 : change,
-          qrisProofPath: qrisProofPath,
-        ),
-      );
 
       if (mounted) {
         Navigator.pop(context); // Tutup loading dialog

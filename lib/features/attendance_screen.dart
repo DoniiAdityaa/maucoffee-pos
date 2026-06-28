@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
-import 'package:maucoffee/data/history_manager.dart';
+import 'package:maucoffee/services/history_manager.dart';
 import 'package:maucoffee/features/cubit/absensi_cubit.dart';
 import 'package:maucoffee/model/absensi_model.dart';
 import 'package:maucoffee/repository/employee_repository.dart';

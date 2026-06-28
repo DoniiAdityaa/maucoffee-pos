@@ -165,4 +165,20 @@ class OfflineStorageService {
     final List<String> list = prefs.getStringList(_ingredientsCacheKey) ?? [];
     return list.map((item) => json.decode(item) as Map<String, dynamic>).toList();
   }
+
+  static const String _dashboardCacheKey = "cached_dashboard_data";
+
+  // Simpan cache data dashboard
+  Future<void> saveDashboardCache(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_dashboardCacheKey, json.encode(data));
+  }
+
+  // Ambil cache data dashboard
+  Future<Map<String, dynamic>?> getDashboardCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dataStr = prefs.getString(_dashboardCacheKey);
+    if (dataStr == null) return null;
+    return json.decode(dataStr) as Map<String, dynamic>;
+  }
 }

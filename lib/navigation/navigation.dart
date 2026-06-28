@@ -11,7 +11,7 @@ import 'package:maucoffee/features/history_screen.dart';
 import 'package:maucoffee/features/attendance_screen.dart';
 import 'package:maucoffee/features/finance_screen.dart';
 import 'package:maucoffee/features/settings_screen.dart';
-import 'package:maucoffee/data/history_manager.dart';
+import 'package:maucoffee/services/history_manager.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -22,12 +22,21 @@ class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key, this.initialIndex = 1});
 
   @override
-  State<MainNavigation> createState() => _MainNavigationState();
+  State<MainNavigation> createState() => MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation> {
+class MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 1; // Default to index 1 (Transaksi Penjualan)
   bool _isMenuOpen = false;
+
+  void setIndex(int index) {
+    if (index >= 0 && index < _pages.length) {
+      setState(() {
+        _currentIndex = index;
+        _isMenuOpen = false;
+      });
+    }
+  }
   late final List<Widget> _pages;
 
   bool get _isAdmin {

@@ -43,6 +43,23 @@ class OrderRepository {
     }
   }
 
+  // 2b. Mengambil detail item dari beberapa order secara batch
+  Future<List<OrderItemModel>> getOrderItemsForOrders(List<String> orderIds) async {
+    if (orderIds.isEmpty) return [];
+    try {
+      final response = await _client
+          .from('order_items')
+          .select()
+          .inFilter('order_id', orderIds);
+
+      return (response as List)
+          .map((json) => OrderItemModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      throw Exception('Gagal memuat batch detail item transaksi: $e');
+    }
+  }
+
   // 3. Upload gambar bukti QRIS ke Supabase Storage
   Future<String> uploadQrisProof(File file, String fileName) async {
     try {

@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:maucoffee/auth/admin_scan_employee_screen.dart';
-import 'package:maucoffee/auth/role_selector_screen.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/features/cubit/absensi_cubit.dart';
@@ -14,6 +13,15 @@ import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 import 'package:maucoffee/home/staff_list/admin_staff_management_screen.dart';
+import 'package:maucoffee/navigation/navigation.dart';
+import 'package:maucoffee/repository/order_repository.dart';
+import 'package:maucoffee/repository/ingredient_repository.dart';
+import 'package:maucoffee/model/order_model.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_state.dart';
+import 'package:maucoffee/model/product_model.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:maucoffee/services/offline_storage_service.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -39,59 +47,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   final timeFormatter = DateFormat('HH:mm');
 
-  // Best Selling Items Mock
-  final List<Map<String, dynamic>> _bestSellers = [
-    {
-      'name': 'Es Kopi Susu',
-      'sales': '32 Cups',
-      'revenue': 576000.0,
-      'trend': '+15%',
-    },
-    {
-      'name': 'Caramel Macchiato',
-      'sales': '18 Cups',
-      'revenue': 396000.0,
-      'trend': '+8%',
-    },
-    {
-      'name': 'Almond Croissant',
-      'sales': '12 Pcs',
-      'revenue': 300000.0,
-      'trend': '+5%',
-    },
-  ];
+  // Best Selling Items
+  List<Map<String, dynamic>> _bestSellers = [];
 
-  // Low Stock Items Mock
-  final List<Map<String, dynamic>> _lowStockItems = [
-    {'name': 'Fresh Milk UHT', 'stock': '3 Pcs left'},
-    {'name': 'Arabica Coffee Beans', 'stock': '1.5 kg left'},
-  ];
+  // Low Stock Items
+  List<Map<String, dynamic>> _lowStockItems = [];
 
-  // Recent Transactions Preview Mock
-  final List<Map<String, dynamic>> _recentTransactions = [
-    {
-      'id': 'TRX-9482',
-      'items': 'Es Kopi Susu x2, Almond Croissant',
-      'time': '10:14 AM',
-      'amount': 54000.0,
-    },
-    {
-      'id': 'TRX-9481',
-      'items': 'Caramel Macchiato, Espresso',
-      'time': '09:55 AM',
-      'amount': 48000.0,
-    },
-    {
-      'id': 'TRX-9480',
-      'items': 'Americano Coffee',
-      'time': '09:30 AM',
-      'amount': 22000.0,
-    },
-  ];
+  // Recent Transactions Preview
+  List<Map<String, dynamic>> _recentTransactions = [];
 
-  // Weekly sales chart data points (Mocked Indonesian Rupiah values in thousands)
-  final List<double> _weeklySalesData = [450, 620, 580, 890, 720, 1100, 950];
-  final List<String> _weeklySalesDays = [
+  // Weekly sales chart data points
+  List<double> _weeklySalesData = [0, 0, 0, 0, 0, 0, 0];
+  List<String> _weeklySalesDays = [
     'Sen',
     'Sel',
     'Rab',
@@ -101,11 +68,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     'Min',
   ];
 
+  bool _isLoadingDashboard = false;
+  String _weeklyGrowthLabel = "0%";
+  Color _weeklyGrowthColor = Colors.white30;
+  double _todaySalesAmount = 0.0;
+  bool _isOfflineMode = false;
+  String _lastSyncTime = "";
+
   @override
   void initState() {
     super.initState();
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
     _loadUserSession();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchDashboardData();
+    });
   }
 
   void _loadUserSession() {
@@ -133,154 +110,491 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     }
   }
 
+  Future<void> _fetchDashboardData() async {
+    if (_isLoadingDashboard) return;
+
+    setState(() {
+      _isLoadingDashboard = true;
+    });
+
+    try {
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOnline = connectivityResult.any((r) => r != ConnectivityResult.none);
+
+      if (!isOnline) {
+        await _loadOfflineDashboardCache();
+        return;
+      }
+
+      // 1. Refresh & pastikan Catalog loaded
+      await context.read<CatalogCubit>().fetchCatalog();
+      final catalogState = context.read<CatalogCubit>().state;
+      List<ProductModel> products = [];
+      if (catalogState is CatalogLoaded) {
+        products = catalogState.products;
+      }
+
+      // 2. Load orders dari OrderRepository (14 hari terakhir untuk Weekly Performance)
+      final orders = await serviceLocator<OrderRepository>().getOrderHistory();
+      final nowLocal = DateTime.now();
+
+      // Saring orders untuk 14 hari terakhir (menggunakan timezone lokal agar akurat)
+      final ordersLocal = orders.map((o) {
+        return OrderModel(
+          id: o.id,
+          adminId: o.adminId,
+          invoiceNumber: o.invoiceNumber,
+          totalAmount: o.totalAmount,
+          paymentMethod: o.paymentMethod,
+          amountPaid: o.amountPaid,
+          change: o.change,
+          qrisProofUrl: o.qrisProofUrl,
+          cashierId: o.cashierId,
+          createdAt: o.createdAt?.toLocal(),
+        );
+      }).toList();
+
+      // ── PERFORMA MINGGUAN (7 Hari Terakhir vs 7 Hari Sebelumnya) ──
+      final List<DateTime> last7Days = List.generate(7, (index) {
+        return DateTime(
+          nowLocal.year,
+          nowLocal.month,
+          nowLocal.day,
+        ).subtract(Duration(days: 6 - index));
+      });
+
+      final List<double> newWeeklySalesData = [];
+      final List<String> newWeeklySalesDays = [];
+      double totalThisWeek = 0;
+
+      for (var day in last7Days) {
+        double dayTotal = 0;
+        for (var order in ordersLocal) {
+          if (order.createdAt != null &&
+              order.createdAt!.year == day.year &&
+              order.createdAt!.month == day.month &&
+              order.createdAt!.day == day.day) {
+            dayTotal += order.totalAmount;
+          }
+        }
+        // Konversi ke ribuan (K)
+        newWeeklySalesData.add(dayTotal / 1000.0);
+        newWeeklySalesDays.add(_getDayLabel(day.weekday));
+        totalThisWeek += dayTotal;
+      }
+
+      // Hitung total minggu sebelumnya (hari ke 7-13 ago)
+      double totalLastWeek = 0;
+      final startLastWeek = DateTime(
+        nowLocal.year,
+        nowLocal.month,
+        nowLocal.day,
+      ).subtract(const Duration(days: 13));
+      final endLastWeek = DateTime(
+        nowLocal.year,
+        nowLocal.month,
+        nowLocal.day,
+      ).subtract(const Duration(days: 7));
+
+      for (var order in ordersLocal) {
+        if (order.createdAt != null) {
+          final orderDate = DateTime(
+            order.createdAt!.year,
+            order.createdAt!.month,
+            order.createdAt!.day,
+          );
+          if (orderDate.isAtSameMomentAs(startLastWeek) ||
+              orderDate.isAtSameMomentAs(endLastWeek) ||
+              (orderDate.isAfter(startLastWeek) &&
+                  orderDate.isBefore(
+                    endLastWeek.add(const Duration(days: 1)),
+                  ))) {
+            totalLastWeek += order.totalAmount;
+          }
+        }
+      }
+
+      double growthPercent = 0;
+      if (totalLastWeek > 0) {
+        growthPercent = ((totalThisWeek - totalLastWeek) / totalLastWeek) * 100;
+      } else if (totalThisWeek > 0) {
+        growthPercent = 100;
+      }
+
+      String growthLabel = "0%";
+      Color growthColor = Colors.white30;
+      if (growthPercent > 0) {
+        growthLabel = "+${growthPercent.toStringAsFixed(1)}%";
+        growthColor = const Color(0xFF2D8A4E);
+      } else if (growthPercent < 0) {
+        growthLabel = "${growthPercent.toStringAsFixed(1)}%";
+        growthColor = const Color(0xFFFF6B6B);
+      } else {
+        growthLabel = "0%";
+        growthColor = Colors.white30;
+      }
+
+      // ── DETEKSI TRANSAKSI HARI INI ──
+      final todayOrders = ordersLocal.where((order) {
+        if (order.createdAt == null) return false;
+        return order.createdAt!.year == nowLocal.year &&
+            order.createdAt!.month == nowLocal.month &&
+            order.createdAt!.day == nowLocal.day;
+      }).toList();
+
+      // Hitung total Penjualan Hari Ini
+      double todaySalesSum = 0;
+      for (var order in todayOrders) {
+        todaySalesSum += order.totalAmount;
+      }
+
+      // ── TRANSAKSI TERBARU HARI INI (Maksimal 5 Transaksi) ──
+      final recentOrders = todayOrders.take(5).toList();
+      final recentOrderIds = recentOrders
+          .map((o) => o.id ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      final allRecentItems = await serviceLocator<OrderRepository>()
+          .getOrderItemsForOrders(recentOrderIds);
+
+      final List<Map<String, dynamic>> newRecentTransactions = [];
+      for (var order in recentOrders) {
+        final orderItems = allRecentItems
+            .where((item) => item.orderId == order.id)
+            .toList();
+
+        String itemsPreview = "";
+        if (orderItems.isEmpty) {
+          itemsPreview = "Manual / Pemasukan Lain";
+        } else {
+          itemsPreview = orderItems
+              .map((item) {
+                final product = products.firstWhere(
+                  (p) => p.id == item.productId,
+                  orElse: () => ProductModel(
+                    id: item.productId,
+                    categoryId: '',
+                    name: item.notes ?? 'Item',
+                    price: item.price,
+                  ),
+                );
+                return "${product.name} x${item.quantity}";
+              })
+              .join(", ");
+        }
+
+        final timeStr = order.createdAt != null
+            ? DateFormat('HH:mm').format(order.createdAt!)
+            : '--:--';
+
+        newRecentTransactions.add({
+          'id': order.invoiceNumber,
+          'items': itemsPreview,
+          'time': timeStr,
+          'amount': order.totalAmount,
+        });
+      }
+
+      // ── PRODUK TERLARIS HARI INI (Maksimal 3 Produk) ──
+      final todayOrderIds = todayOrders
+          .map((o) => o.id ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      final todayItems = await serviceLocator<OrderRepository>()
+          .getOrderItemsForOrders(todayOrderIds);
+
+      final Map<String, int> productQuantities = {};
+      final Map<String, double> productRevenues = {};
+
+      for (var item in todayItems) {
+        final product = products.firstWhere(
+          (p) => p.id == item.productId,
+          orElse: () => ProductModel(
+            id: item.productId,
+            categoryId: '',
+            name: item.notes ?? 'Menu Lain',
+            price: item.price,
+          ),
+        );
+        final productName = product.name;
+
+        productQuantities[productName] =
+            (productQuantities[productName] ?? 0) + item.quantity;
+        productRevenues[productName] =
+            (productRevenues[productName] ?? 0.0) +
+            (item.price * item.quantity);
+      }
+
+      final List<Map<String, dynamic>> bestSellersComputed = [];
+      productQuantities.forEach((productName, qty) {
+        final revenue = productRevenues[productName] ?? 0.0;
+        bestSellersComputed.add({
+          'name': productName,
+          'sales': '$qty Cups',
+          'revenue': revenue,
+          'trend': 'Terlaris',
+        });
+      });
+
+      bestSellersComputed.sort((a, b) {
+        final int qtyA = int.parse((a['sales'] as String).split(' ')[0]);
+        final int qtyB = int.parse((b['sales'] as String).split(' ')[0]);
+        return qtyB.compareTo(qtyA);
+      });
+
+      final newBestSellers = bestSellersComputed.take(3).toList();
+
+      // ── PERINGATAN STOK MENIPIS (Maksimal 5 Bahan Baku) ──
+      final ingredients = await serviceLocator<IngredientRepository>()
+          .getIngredients();
+      final List<Map<String, dynamic>> newLowStockItems = [];
+      for (var ingredient in ingredients) {
+        if (ingredient.stock <= ingredient.minStock) {
+          newLowStockItems.add({
+            'name': ingredient.name,
+            'stock':
+                '${ingredient.stock.toStringAsFixed(1)} ${ingredient.unit} tersisa',
+          });
+        }
+      }
+      final limitedLowStockItems = newLowStockItems.take(5).toList();
+
+      final cacheData = {
+        'weeklySalesData': newWeeklySalesData,
+        'weeklySalesDays': newWeeklySalesDays,
+        'weeklyGrowthLabel': growthLabel,
+        'weeklyGrowthColor': growthColor.value,
+        'recentTransactions': newRecentTransactions,
+        'bestSellers': newBestSellers,
+        'lowStockItems': limitedLowStockItems,
+        'todaySalesAmount': todaySalesSum,
+        'lastSyncTime': DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now()),
+      };
+      await serviceLocator<OfflineStorageService>().saveDashboardCache(cacheData);
+
+      setState(() {
+        _weeklySalesData = newWeeklySalesData;
+        _weeklySalesDays = newWeeklySalesDays;
+        _weeklyGrowthLabel = growthLabel;
+        _weeklyGrowthColor = growthColor;
+        _recentTransactions = newRecentTransactions;
+        _bestSellers = newBestSellers;
+        _lowStockItems = limitedLowStockItems;
+        _todaySalesAmount = todaySalesSum;
+        _isOfflineMode = false;
+        _lastSyncTime = "";
+        _isLoadingDashboard = false;
+      });
+    } catch (e) {
+      await _loadOfflineDashboardCache();
+      if (mounted) {
+        CustomFeedback.showInfo(context, "Terhubung offline. Menampilkan data cache.");
+      }
+    }
+  }
+
+  Future<void> _loadOfflineDashboardCache() async {
+    try {
+      final cache = await serviceLocator<OfflineStorageService>().getDashboardCache();
+      if (cache != null) {
+        setState(() {
+          _weeklySalesData = List<double>.from(cache['weeklySalesData'] ?? [0, 0, 0, 0, 0, 0, 0]);
+          _weeklySalesDays = List<String>.from(cache['weeklySalesDays'] ?? ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']);
+          _weeklyGrowthLabel = cache['weeklyGrowthLabel'] ?? "0%";
+          _weeklyGrowthColor = Color(cache['weeklyGrowthColor'] ?? Colors.white30.value);
+          _recentTransactions = List<Map<String, dynamic>>.from(cache['recentTransactions'] ?? []);
+          _bestSellers = List<Map<String, dynamic>>.from(cache['bestSellers'] ?? []);
+          _lowStockItems = List<Map<String, dynamic>>.from(cache['lowStockItems'] ?? []);
+          _todaySalesAmount = (cache['todaySalesAmount'] as num?)?.toDouble() ?? 0.0;
+          _isOfflineMode = true;
+          _lastSyncTime = cache['lastSyncTime'] ?? "";
+          _isLoadingDashboard = false;
+        });
+      } else {
+        setState(() {
+          _isOfflineMode = true;
+          _lastSyncTime = "";
+          _isLoadingDashboard = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isOfflineMode = true;
+        _isLoadingDashboard = false;
+      });
+    }
+  }
+
+  String _getDayLabel(int weekday) {
+    switch (weekday) {
+      case 1:
+        return 'Sen';
+      case 2:
+        return 'Sel';
+      case 3:
+        return 'Rab';
+      case 4:
+        return 'Kam';
+      case 5:
+        return 'Jum';
+      case 6:
+        return 'Sab';
+      case 7:
+        return 'Min';
+      default:
+        return '';
+    }
+  }
+
   @override
   void dispose() {
     super.dispose();
   }
 
   // Handle Logout Confirmation
-  Future<void> _handleLogout(BuildContext context) async {
-    HapticFeedback.mediumImpact();
+  // Future<void> _handleLogout(BuildContext context) async {
+  //   HapticFeedback.mediumImpact();
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Container(
-            padding: const EdgeInsets.all(spacing7),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              color: const Color(0xFF2A1A0A).withValues(alpha: 0.95),
-              border: Border(
-                top: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildLogoutHandlebar(),
-                const SizedBox(height: spacing6),
-                const Icon(
-                  Icons.logout_rounded,
-                  color: Color(0xFFFF6B6B),
-                  size: 32,
-                ),
-                const SizedBox(height: spacing4),
-                Text(
-                  "Keluar?",
-                  style: lgBold.copyWith(
-                    color: Colors.white,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: spacing2),
-                Text(
-                  "Anda harus masuk kembali untuk mengakses\ndashboard Anda",
-                  style: xsRegular.copyWith(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: spacing7),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => Navigator.pop(ctx),
-                        child: Container(
-                          height: 50,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            color: Colors.white.withValues(alpha: 0.06),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08),
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            "Batal",
-                            style: smBold.copyWith(
-                              color: Colors.white.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: spacing4),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          final prefs = serviceLocator<UserPreference>();
-                          prefs.clearData();
+  //   showModalBottomSheet(
+  //     context: context,
+  //     backgroundColor: Colors.transparent,
+  //     builder: (ctx) => ClipRRect(
+  //       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+  //       child: BackdropFilter(
+  //         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+  //         child: Container(
+  //           padding: const EdgeInsets.all(spacing7),
+  //           decoration: BoxDecoration(
+  //             borderRadius: const BorderRadius.vertical(
+  //               top: Radius.circular(24),
+  //             ),
+  //             color: const Color(0xFF2A1A0A).withValues(alpha: 0.95),
+  //             border: Border(
+  //               top: BorderSide(
+  //                 color: Colors.white.withValues(alpha: 0.1),
+  //                 width: 1,
+  //               ),
+  //             ),
+  //           ),
+  //           child: Column(
+  //             mainAxisSize: MainAxisSize.min,
+  //             children: [
+  //               _buildLogoutHandlebar(),
+  //               const SizedBox(height: spacing6),
+  //               const Icon(
+  //                 Icons.logout_rounded,
+  //                 color: Color(0xFFFF6B6B),
+  //                 size: 32,
+  //               ),
+  //               const SizedBox(height: spacing4),
+  //               Text(
+  //                 "Keluar?",
+  //                 style: lgBold.copyWith(
+  //                   color: Colors.white,
+  //                   letterSpacing: -0.3,
+  //                 ),
+  //               ),
+  //               const SizedBox(height: spacing2),
+  //               Text(
+  //                 "Anda harus masuk kembali untuk mengakses\ndashboard Anda",
+  //                 style: xsRegular.copyWith(
+  //                   color: Colors.white.withValues(alpha: 0.4),
+  //                   height: 1.5,
+  //                 ),
+  //                 textAlign: TextAlign.center,
+  //               ),
+  //               const SizedBox(height: spacing7),
+  //               Row(
+  //                 children: [
+  //                   Expanded(
+  //                     child: GestureDetector(
+  //                       onTap: () => Navigator.pop(ctx),
+  //                       child: Container(
+  //                         height: 50,
+  //                         decoration: BoxDecoration(
+  //                           borderRadius: BorderRadius.circular(14),
+  //                           color: Colors.white.withValues(alpha: 0.06),
+  //                           border: Border.all(
+  //                             color: Colors.white.withValues(alpha: 0.08),
+  //                           ),
+  //                         ),
+  //                         alignment: Alignment.center,
+  //                         child: Text(
+  //                           "Batal",
+  //                           style: smBold.copyWith(
+  //                             color: Colors.white.withValues(alpha: 0.5),
+  //                           ),
+  //                         ),
+  //                       ),
+  //                     ),
+  //                   ),
+  //                   const SizedBox(width: spacing4),
+  //                   Expanded(
+  //                     child: GestureDetector(
+  //                       onTap: () {
+  //                         Navigator.pop(ctx);
+  //                         final prefs = serviceLocator<UserPreference>();
+  //                         prefs.clearData();
 
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            PageRouteBuilder(
-                              pageBuilder:
-                                  (context, animation, secondaryAnimation) =>
-                                      const RoleSelectorScreen(),
-                              transitionDuration: const Duration(
-                                milliseconds: 400,
-                              ),
-                              transitionsBuilder:
-                                  (
-                                    context,
-                                    animation,
-                                    secondaryAnimation,
-                                    child,
-                                  ) {
-                                    return FadeTransition(
-                                      opacity: animation,
-                                      child: child,
-                                    );
-                                  },
-                            ),
-                            (route) => false,
-                          );
-                        },
-                        child: Container(
-                          height: 50,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            color: const Color(
-                              0xFFFF6B6B,
-                            ).withValues(alpha: 0.15),
-                            border: Border.all(
-                              color: const Color(
-                                0xFFFF6B6B,
-                              ).withValues(alpha: 0.3),
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            "Keluar",
-                            style: smBold.copyWith(
-                              color: const Color(0xFFFF8A8A),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: MediaQuery.of(ctx).padding.bottom + spacing4),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  //                         Navigator.pushAndRemoveUntil(
+  //                           context,
+  //                           PageRouteBuilder(
+  //                             pageBuilder:
+  //                                 (context, animation, secondaryAnimation) =>
+  //                                     const RoleSelectorScreen(),
+  //                             transitionDuration: const Duration(
+  //                               milliseconds: 400,
+  //                             ),
+  //                             transitionsBuilder:
+  //                                 (
+  //                                   context,
+  //                                   animation,
+  //                                   secondaryAnimation,
+  //                                   child,
+  //                                 ) {
+  //                                   return FadeTransition(
+  //                                     opacity: animation,
+  //                                     child: child,
+  //                                   );
+  //                                 },
+  //                           ),
+  //                           (route) => false,
+  //                         );
+  //                       },
+  //                       child: Container(
+  //                         height: 50,
+  //                         decoration: BoxDecoration(
+  //                           borderRadius: BorderRadius.circular(14),
+  //                           color: const Color(
+  //                             0xFFFF6B6B,
+  //                           ).withValues(alpha: 0.15),
+  //                           border: Border.all(
+  //                             color: const Color(
+  //                               0xFFFF6B6B,
+  //                             ).withValues(alpha: 0.3),
+  //                           ),
+  //                         ),
+  //                         alignment: Alignment.center,
+  //                         child: Text(
+  //                           "Keluar",
+  //                           style: smBold.copyWith(
+  //                             color: const Color(0xFFFF8A8A),
+  //                           ),
+  //                         ),
+  //                       ),
+  //                     ),
+  //                   ),
+  //                 ],
+  //               ),
+  //               SizedBox(height: MediaQuery.of(ctx).padding.bottom + spacing4),
+  //             ],
+  //           ),
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -294,12 +608,47 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             bottom: false,
             child: Column(
               children: [
-                _buildHeader(context),
+                 _buildHeader(context),
+                if (_isOfflineMode) ...[
+                  const SizedBox(height: spacing2),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: spacing6),
+                    padding: const EdgeInsets.symmetric(horizontal: spacing4, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF9E22).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFFF9E22).withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.cloud_off_rounded,
+                          color: Color(0xFFFF9E22),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _lastSyncTime.isNotEmpty
+                                ? "Mode Offline - Sinkronisasi terakhir: $_lastSyncTime"
+                                : "Mode Offline - Koneksi terputus",
+                            style: xxsMedium.copyWith(color: const Color(0xFFFFB74D)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: spacing7),
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: () async {
-                      await context.read<AbsensiCubit>().fetchActiveShifts();
+                      await Future.wait([
+                        context.read<AbsensiCubit>().fetchActiveShifts(),
+                        _fetchDashboardData(),
+                      ]);
                     },
                     color: primaryColor,
                     backgroundColor: const Color(0xFF2A1A0A),
@@ -487,25 +836,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               ),
             ),
           ],
-          const SizedBox(width: spacing3),
-          // Logout Trigger Button
-          GestureDetector(
-            onTap: () => _handleLogout(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.06),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Icon(
-                Icons.logout_rounded,
-                color: Colors.white.withValues(alpha: 0.4),
-                size: 18,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -592,7 +922,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 ],
               ),
               Text(
-                "Rp 0",
+                currencyFormatter.format(_todaySalesAmount),
                 style: xlBold.copyWith(
                   color: Colors.white,
                   letterSpacing: -0.3,
@@ -662,15 +992,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
-                          color: const Color(
-                            0xFF2D8A4E,
-                          ).withValues(alpha: 0.12),
+                          color: _weeklyGrowthColor.withValues(alpha: 0.12),
                         ),
                         child: Text(
-                          "+15.4%",
-                          style: xxsBold.copyWith(
-                            color: const Color(0xFF2D8A4E),
-                          ),
+                          _weeklyGrowthLabel,
+                          style: xxsBold.copyWith(color: _weeklyGrowthColor),
                         ),
                       ),
                     ],
@@ -968,78 +1294,92 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   width: 1,
                 ),
               ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _bestSellers.length,
-                separatorBuilder: (context, index) => Divider(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  height: 1,
-                ),
-                itemBuilder: (context, index) {
-                  final item = _bestSellers[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: spacing3),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(
-                              0xFFE27D00,
-                            ).withValues(alpha: 0.1),
-                          ),
-                          child: const Icon(
-                            Icons.local_cafe_outlined,
-                            color: Color(0xFFE27D00),
-                            size: 18,
-                          ),
+              child: _bestSellers.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: spacing5),
+                      child: Center(
+                        child: Text(
+                          "Belum ada order hari ini.",
+                          style: sRegular.copyWith(color: Colors.white38),
                         ),
-                        const SizedBox(width: spacing4),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _bestSellers.length,
+                      separatorBuilder: (context, index) => Divider(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        height: 1,
+                      ),
+                      itemBuilder: (context, index) {
+                        final item = _bestSellers[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: spacing3,
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                item['name'],
-                                style: smBold.copyWith(color: Colors.white70),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Total: ${item['sales']}",
-                                style: xxsRegular.copyWith(
-                                  color: Colors.white38,
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(
+                                    0xFFE27D00,
+                                  ).withValues(alpha: 0.1),
                                 ),
+                                child: const Icon(
+                                  Icons.local_cafe_outlined,
+                                  color: Color(0xFFE27D00),
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: spacing4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['name'],
+                                      style: smBold.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      "Total: ${item['sales']}",
+                                      style: xxsRegular.copyWith(
+                                        color: Colors.white38,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: spacing2),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    currencyFormatter.format(item['revenue']),
+                                    style: smBold.copyWith(
+                                      color: const Color(0xFF2D8A4E),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    item['trend'],
+                                    style: xxsBold.copyWith(
+                                      color: const Color(0xFF2D8A4E),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: spacing2),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              currencyFormatter.format(item['revenue']),
-                              style: smBold.copyWith(
-                                color: const Color(0xFF2D8A4E),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              item['trend'],
-                              style: xxsBold.copyWith(
-                                color: const Color(0xFF2D8A4E),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ),
         ),
@@ -1051,11 +1391,38 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "PERINGATAN STOK MENIPIS",
-          style: xsBold.copyWith(
-            color: Colors.white.withValues(alpha: 0.3),
-            letterSpacing: 1.2,
+        GestureDetector(
+          onTap: () {
+            final mainNav = context
+                .findAncestorStateOfType<MainNavigationState>();
+            mainNav?.setIndex(6); // Catalog/Inventaris screen
+          },
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "PERINGATAN STOK MENIPIS",
+                style: xsBold.copyWith(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  letterSpacing: 1.2,
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Lihat Detail",
+                    style: xxsMedium.copyWith(color: const Color(0xFFFF6B6B)),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFFFF6B6B),
+                    size: 16,
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
         const SizedBox(height: spacing4),
@@ -1076,83 +1443,97 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   width: 1,
                 ),
               ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _lowStockItems.length,
-                separatorBuilder: (context, index) => Divider(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  height: 1,
-                ),
-                itemBuilder: (context, index) {
-                  final item = _lowStockItems[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: spacing3),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(
-                              0xFFFF6B6B,
-                            ).withValues(alpha: 0.1),
-                          ),
-                          child: const Icon(
-                            Icons.warning_amber_rounded,
-                            color: Color(0xFFFF6B6B),
-                            size: 18,
-                          ),
+              child: _lowStockItems.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: spacing5),
+                      child: Center(
+                        child: Text(
+                          "Semua stok bahan baku aman.",
+                          style: sRegular.copyWith(color: Colors.white38),
                         ),
-                        const SizedBox(width: spacing4),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _lowStockItems.length,
+                      separatorBuilder: (context, index) => Divider(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        height: 1,
+                      ),
+                      itemBuilder: (context, index) {
+                        final item = _lowStockItems[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: spacing3,
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                item['name'],
-                                style: smBold.copyWith(color: Colors.white70),
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(
+                                    0xFFFF6B6B,
+                                  ).withValues(alpha: 0.1),
+                                ),
+                                child: const Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: Color(0xFFFF6B6B),
+                                  size: 18,
+                                ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                "Level stok: ${item['stock']}",
-                                style: xxsRegular.copyWith(
-                                  color: const Color(0xFFFF8A8A),
+                              const SizedBox(width: spacing4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['name'],
+                                      style: smBold.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      "Level stok: ${item['stock']}",
+                                      style: xxsRegular.copyWith(
+                                        color: const Color(0xFFFF8A8A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: spacing2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  color: const Color(
+                                    0xFFFF6B6B,
+                                  ).withValues(alpha: 0.15),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFFFF6B6B,
+                                    ).withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Text(
+                                  "ISI ULANG",
+                                  style: xxxsBold.copyWith(
+                                    color: const Color(0xFFFF8A8A),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: spacing2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
-                            color: const Color(
-                              0xFFFF6B6B,
-                            ).withValues(alpha: 0.15),
-                            border: Border.all(
-                              color: const Color(
-                                0xFFFF6B6B,
-                              ).withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Text(
-                            "ISI ULANG",
-                            style: xxxsBold.copyWith(
-                              color: const Color(0xFFFF8A8A),
-                            ),
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ),
         ),
@@ -1164,11 +1545,38 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "TRANSAKSI TERBARU",
-          style: xsBold.copyWith(
-            color: Colors.white.withValues(alpha: 0.3),
-            letterSpacing: 1.2,
+        GestureDetector(
+          onTap: () {
+            final mainNav = context
+                .findAncestorStateOfType<MainNavigationState>();
+            mainNav?.setIndex(2); // History/Aktivitas screen
+          },
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "TRANSAKSI TERBARU",
+                style: xsBold.copyWith(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  letterSpacing: 1.2,
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Lihat Detail",
+                    style: xxsMedium.copyWith(color: const Color(0xFF2D8A4E)),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFF2D8A4E),
+                    size: 16,
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
         const SizedBox(height: spacing4),
@@ -1189,93 +1597,98 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   width: 1,
                 ),
               ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _recentTransactions.length,
-                separatorBuilder: (context, index) => Divider(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  height: 1,
-                ),
-                itemBuilder: (context, index) {
-                  final trx = _recentTransactions[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: spacing3),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(
-                              0xFF2D8A4E,
-                            ).withValues(alpha: 0.1),
-                          ),
-                          child: const Icon(
-                            Icons.receipt_long_outlined,
-                            color: Color(0xFF2D8A4E),
-                            size: 18,
-                          ),
+              child: _recentTransactions.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: spacing5),
+                      child: Center(
+                        child: Text(
+                          "Belum ada transaksi saat ini.",
+                          style: sRegular.copyWith(color: Colors.white38),
                         ),
-                        const SizedBox(width: spacing4),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _recentTransactions.length,
+                      separatorBuilder: (context, index) => Divider(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        height: 1,
+                      ),
+                      itemBuilder: (context, index) {
+                        final trx = _recentTransactions[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: spacing3,
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                trx['id'],
-                                style: smBold.copyWith(color: Colors.white70),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                trx['items'],
-                                style: xxsRegular.copyWith(
-                                  color: Colors.white38,
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(
+                                    0xFF2D8A4E,
+                                  ).withValues(alpha: 0.1),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                child: const Icon(
+                                  Icons.receipt_long_outlined,
+                                  color: Color(0xFF2D8A4E),
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: spacing4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      trx['id'],
+                                      style: smBold.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      trx['items'],
+                                      style: xxsRegular.copyWith(
+                                        color: Colors.white38,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: spacing2),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    currencyFormatter.format(trx['amount']),
+                                    style: smBold.copyWith(
+                                      color: const Color(0xFFFF9E22),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    trx['time'],
+                                    style: xxsRegular.copyWith(
+                                      color: Colors.white30,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: spacing2),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              currencyFormatter.format(trx['amount']),
-                              style: smBold.copyWith(
-                                color: const Color(0xFFFF9E22),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              trx['time'],
-                              style: xxsRegular.copyWith(color: Colors.white30),
-                            ),
-                          ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildLogoutHandlebar() {
-    return Container(
-      width: 36,
-      height: 4,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(2),
-        color: Colors.white.withValues(alpha: 0.15),
-      ),
     );
   }
 }

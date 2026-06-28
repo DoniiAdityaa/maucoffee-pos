@@ -2,8 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:maucoffee/data/history_manager.dart';
 import 'package:maucoffee/model/expense_model.dart';
+import 'package:maucoffee/model/order_item_model.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -104,9 +104,106 @@ class _FinanceScreenState extends State<FinanceScreen>
     super.dispose();
   }
 
+  Widget _buildDismissibleBackground() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: spacing3),
+      padding: const EdgeInsets.symmetric(horizontal: spacing5),
+      alignment: Alignment.centerRight,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.transparent, Colors.redAccent.withValues(alpha: 0.2)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text("Hapus", style: sBold.copyWith(color: Colors.redAccent)),
+          const SizedBox(width: spacing3),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _showDeleteExpenseConfirmation(ExpenseModel expense) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF2A1A0A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(spacing5),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.08),
+              width: 1.2,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "Hapus Catatan Pengeluaran?",
+                style: mdBold.copyWith(color: Colors.white),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "Apakah Anda yakin ingin menghapus pengeluaran '${expense.title}' sebesar ${currencyFormatter.format(expense.amount)}?",
+                style: sMedium.copyWith(color: Colors.white70),
+              ),
+              const SizedBox(height: spacing5),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white30),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: spacing3),
+                      ),
+                      child: Text(
+                        "Batal",
+                        style: sBold.copyWith(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: spacing3),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: spacing3),
+                      ),
+                      child: Text(
+                        "Hapus",
+                        style: sBold.copyWith(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   bool _isWithinDateRange(DateTime date) {
+    final localDate = date.toLocal();
     final target = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final itemDate = DateTime(date.year, date.month, date.day);
+    final itemDate = DateTime(localDate.year, localDate.month, localDate.day);
     return itemDate.isAtSameMomentAs(target);
   }
 
@@ -661,7 +758,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                             const SizedBox(width: spacing4),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
+                                onPressed: () async {
                                   if (formKey.currentState!.validate()) {
                                     final title = selectedCategory == 'Salary'
                                         ? 'Gaji / Salary'
@@ -680,14 +777,48 @@ class _FinanceScreenState extends State<FinanceScreen>
                                       createdAt: selectedDate,
                                     );
 
-                                    HistoryManager().addExpense(newExp);
-
-                                    Navigator.pop(ctx);
-                                    CustomFeedback.showSuccess(
-                                      context,
-                                      "Pengeluaran '$title' berhasil dicatat!",
+                                    // Tampilkan loading dialog
+                                    BuildContext? dialogCtx;
+                                    showDialog(
+                                      context: ctx,
+                                      barrierDismissible: false,
+                                      builder: (dCtx) {
+                                        dialogCtx = dCtx;
+                                        return const Center(
+                                          child: CircularProgressIndicator(color: primaryColor),
+                                        );
+                                      },
                                     );
-                                    setState(() {});
+
+                                    try {
+                                      // Simpan ke database Supabase
+                                      await serviceLocator<ExpenseRepository>().addExpense(newExp);
+
+                                      // Tutup loading dialog
+                                      if (dialogCtx != null) {
+                                        Navigator.pop(dialogCtx!);
+                                      }
+
+                                      // Tutup bottom sheet
+                                      Navigator.pop(ctx);
+
+                                      if (!mounted) return;
+                                      CustomFeedback.showSuccess(
+                                        context,
+                                        "Pengeluaran '$title' berhasil dicatat!",
+                                      );
+                                      _fetchFinanceData();
+                                    } catch (e) {
+                                      // Tutup loading dialog jika masih terbuka
+                                      if (dialogCtx != null) {
+                                        Navigator.pop(dialogCtx!);
+                                      }
+                                      if (!mounted) return;
+                                      CustomFeedback.showError(
+                                        context,
+                                        "Gagal menyimpan pengeluaran: $e",
+                                      );
+                                    }
                                   } else {
                                     HapticFeedback.heavyImpact();
                                   }
@@ -1029,37 +1160,77 @@ class _FinanceScreenState extends State<FinanceScreen>
                             const SizedBox(width: spacing4),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
+                                onPressed: () async {
                                   if (formKey.currentState!.validate()) {
                                     final title = titleController.text.trim();
                                     final amount = double.parse(amountController.text.trim());
                                     final notes = notesController.text.trim();
 
-                                    final newTx = TransactionHistory(
-                                      id: "TRX-MAN-${10000 + (DateTime.now().millisecond * 7) % 90000}",
-                                      customerName: "Manual (Owner)",
-                                      dateTime: selectedDate,
+                                    final trxNum = "TRX-MAN-${10000 + (DateTime.now().millisecond * 7) % 90000}";
+                                    final order = OrderModel(
+                                      invoiceNumber: trxNum,
                                       totalAmount: amount,
                                       paymentMethod: selectedPaymentMethod,
-                                      paidAmount: amount,
-                                      changeAmount: 0,
-                                      items: [
-                                        TransactionItem(
-                                          name: title + (notes.isNotEmpty ? " ($notes)" : ""),
-                                          qty: 1,
-                                          price: amount,
-                                        ),
-                                      ],
+                              amountPaid: amount,
+                                      change: 0,
+                                      createdAt: selectedDate,
                                     );
 
-                                    HistoryManager().addTransaction(newTx);
+                                    final items = [
+                                      OrderItemModel(
+                                        orderId: '',
+                                        productId: 'manual_income',
+                                        quantity: 1,
+                                        price: amount,
+                                        notes: title + (notes.isNotEmpty ? " - $notes" : ""),
+                                      )
+                                    ];
 
-                                    Navigator.pop(ctx);
-                                    CustomFeedback.showSuccess(
-                                      context,
-                                      "Pemasukan '$title' berhasil dicatat!",
+                                    // Tampilkan loading dialog
+                                    BuildContext? dialogCtx;
+                                    showDialog(
+                                      context: ctx,
+                                      barrierDismissible: false,
+                                      builder: (dCtx) {
+                                        dialogCtx = dCtx;
+                                        return const Center(
+                                          child: CircularProgressIndicator(color: primaryColor),
+                                        );
+                                      },
                                     );
-                                    setState(() {});
+
+                                    try {
+                                      // Simpan ke database Supabase
+                                      await serviceLocator<OrderRepository>().createOrder(
+                                        order: order,
+                                        items: items,
+                                      );
+
+                                      // Tutup loading dialog
+                                      if (dialogCtx != null) {
+                                        Navigator.pop(dialogCtx!);
+                                      }
+
+                                      // Tutup bottom sheet
+                                      Navigator.pop(ctx);
+
+                                      if (!mounted) return;
+                                      CustomFeedback.showSuccess(
+                                        context,
+                                        "Pemasukan '$title' berhasil dicatat!",
+                                      );
+                                      _fetchFinanceData();
+                                    } catch (e) {
+                                      // Tutup loading dialog jika masih terbuka
+                                      if (dialogCtx != null) {
+                                        Navigator.pop(dialogCtx!);
+                                      }
+                                      if (!mounted) return;
+                                      CustomFeedback.showError(
+                                        context,
+                                        "Gagal menyimpan pemasukan: $e",
+                                      );
+                                    }
                                   } else {
                                     HapticFeedback.heavyImpact();
                                   }
@@ -1421,7 +1592,7 @@ class _FinanceScreenState extends State<FinanceScreen>
             categoryLabel = 'Lain-lain';
         }
 
-        return Container(
+        final itemWidget = Container(
           margin: const EdgeInsets.only(bottom: spacing3),
           padding: const EdgeInsets.all(spacing4),
           decoration: BoxDecoration(
@@ -1466,7 +1637,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                             if (exp.createdAt != null) ...[
                               const SizedBox(width: 8),
                               Text(
-                                dateFormatter.format(exp.createdAt!),
+                                dateFormatter.format(exp.createdAt!.toLocal()),
                                 style: xxsRegular.copyWith(color: Colors.white30),
                               ),
                             ],
@@ -1505,6 +1676,44 @@ class _FinanceScreenState extends State<FinanceScreen>
               ],
             ],
           ),
+        );
+
+        return Dismissible(
+          key: Key(exp.id ?? ''),
+          direction: _isAdmin ? DismissDirection.endToStart : DismissDirection.none,
+          secondaryBackground: _buildDismissibleBackground(),
+          background: const SizedBox(),
+          confirmDismiss: (direction) async {
+            HapticFeedback.mediumImpact();
+            final confirm = await _showDeleteExpenseConfirmation(exp);
+            return confirm ?? false;
+          },
+          onDismissed: (direction) async {
+            // Update UI state optimistically
+            setState(() {
+              _expenses.removeWhere((item) => item.id == exp.id);
+            });
+
+            try {
+              // Delete from Supabase
+              await serviceLocator<ExpenseRepository>().deleteExpense(exp.id!);
+
+              if (!mounted) return;
+              CustomFeedback.showSuccess(
+                context,
+                "Catatan pengeluaran '${exp.title}' berhasil dihapus.",
+              );
+              _fetchFinanceData();
+            } catch (e) {
+              if (!mounted) return;
+              CustomFeedback.showError(
+                context,
+                "Gagal menghapus pengeluaran: $e",
+              );
+              _fetchFinanceData(); // Reload to restore item in UI
+            }
+          },
+          child: itemWidget,
         );
       },
     );
@@ -1598,7 +1807,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                         if (tx.createdAt != null) ...[
                           const SizedBox(width: 8),
                           Text(
-                            dateFormatter.format(tx.createdAt!),
+                            dateFormatter.format(tx.createdAt!.toLocal()),
                             style: xxsRegular.copyWith(color: Colors.white30),
                           ),
                         ],

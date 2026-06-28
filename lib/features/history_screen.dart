@@ -292,7 +292,8 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     int txCount = 0;
     for (var tx in _orders) {
       if (tx.createdAt != null) {
-        final txDate = DateTime(tx.createdAt!.year, tx.createdAt!.month, tx.createdAt!.day);
+        final txLocal = tx.createdAt!.toLocal();
+        final txDate = DateTime(txLocal.year, txLocal.month, txLocal.day);
         if (txDate.isAtSameMomentAs(targetDate)) {
           totalRevenueToday += tx.totalAmount;
           txCount++;
@@ -303,7 +304,8 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     int logCount = 0;
     for (var log in _stockLogs) {
       if (log.createdAt != null) {
-        final logDate = DateTime(log.createdAt!.year, log.createdAt!.month, log.createdAt!.day);
+        final logLocal = log.createdAt!.toLocal();
+        final logDate = DateTime(logLocal.year, logLocal.month, logLocal.day);
         if (logDate.isAtSameMomentAs(targetDate)) {
           logCount++;
         }
@@ -464,7 +466,8 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     final targetDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     final transactions = _orders.where((tx) {
       if (tx.createdAt == null) return false;
-      final txDate = DateTime(tx.createdAt!.year, tx.createdAt!.month, tx.createdAt!.day);
+      final txLocal = tx.createdAt!.toLocal();
+      final txDate = DateTime(txLocal.year, txLocal.month, txLocal.day);
       return txDate.isAtSameMomentAs(targetDate);
     }).toList();
 
@@ -568,10 +571,10 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                               style: xsMedium.copyWith(color: Colors.white70),
                             ),
                             if (tx.createdAt != null) ...[
-                              const SizedBox(height: 2),
+                              const SizedBox(width: 8),
                               Text(
-                                dateFormatter.format(tx.createdAt!),
-                                style: xxsRegular.copyWith(color: Colors.white38),
+                                dateFormatter.format(tx.createdAt!.toLocal()),
+                                style: xxsRegular.copyWith(color: Colors.white30),
                               ),
                             ],
                           ],
@@ -800,7 +803,8 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     final targetDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     final logs = _stockLogs.where((log) {
       if (log.createdAt == null) return false;
-      final logDate = DateTime(log.createdAt!.year, log.createdAt!.month, log.createdAt!.day);
+      final logLocal = log.createdAt!.toLocal();
+      final logDate = DateTime(logLocal.year, logLocal.month, logLocal.day);
       return logDate.isAtSameMomentAs(targetDate);
     }).toList();
 
@@ -897,7 +901,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                         if (log.createdAt != null) ...[
                           const SizedBox(width: 8),
                           Text(
-                            dateFormatter.format(log.createdAt!),
+                            dateFormatter.format(log.createdAt!.toLocal()),
                             style: xxsRegular.copyWith(color: Colors.white30),
                           ),
                         ],
