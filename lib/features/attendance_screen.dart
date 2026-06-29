@@ -244,7 +244,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         final offlineData = {
           'id': shiftId,
           'employee_id': currentEmployeeId,
-          'clock_in': now.toIso8601String(),
+          'clock_in': now.toUtc().toIso8601String(),
         };
         try {
           await serviceLocator<OfflineStorageService>()
@@ -478,7 +478,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         final offlineData = {
           'id': shiftId,
           'note': note,
-          'clock_out': now.toIso8601String(),
+          'clock_out': now.toUtc().toIso8601String(),
         };
         try {
           await serviceLocator<OfflineStorageService>().saveAttendanceEndQueue(

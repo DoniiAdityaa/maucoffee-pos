@@ -70,7 +70,7 @@ class AbsensiRepository {
           .from('shifts')
           .insert({
             'employee_id': employeeId,
-            'clock_in': (clockIn ?? DateTime.now()).toIso8601String(),
+            'clock_in': (clockIn ?? DateTime.now()).toUtc().toIso8601String(),
           })
           .select('id')
           .single();
@@ -87,7 +87,7 @@ class AbsensiRepository {
       await _client
           .from('shifts')
           .update({
-            'clock_out': (clockOut ?? DateTime.now()).toIso8601String(),
+            'clock_out': (clockOut ?? DateTime.now()).toUtc().toIso8601String(),
             'note': note,
           })
           .eq('id', shiftId);

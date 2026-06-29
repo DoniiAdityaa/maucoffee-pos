@@ -61,18 +61,22 @@ class MyApp extends StatelessWidget {
         ),
         BlocProvider(create: (_) => serviceLocator<CatalogCubit>()),
       ],
-      child: MaterialApp(
-        title: 'Mau Coffee POS',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFE27D00),
-            brightness: Brightness.dark,
+      child: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: MaterialApp(
+          title: 'Mau Coffee POS',
+
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFFE27D00),
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+            scaffoldBackgroundColor: const Color(0xFF1C1207),
           ),
-          useMaterial3: true,
-          scaffoldBackgroundColor: const Color(0xFF1C1207),
+          home: initialScreen,
         ),
-        home: initialScreen,
       ),
     );
   }

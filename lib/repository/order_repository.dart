@@ -113,4 +113,16 @@ class OrderRepository {
       throw Exception('Gagal memproses transaksi: $e');
     }
   }
+
+  // 5. Menghapus transaksi beserta semua item-nya
+  Future<void> deleteOrder(String orderId) async {
+    try {
+      // Hapus order_items dulu (child records)
+      await _client.from('order_items').delete().eq('order_id', orderId);
+      // Lalu hapus order utama
+      await _client.from('orders').delete().eq('id', orderId);
+    } catch (e) {
+      throw Exception('Gagal menghapus transaksi: $e');
+    }
+  }
 }

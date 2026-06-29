@@ -38,6 +38,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
   // Cache detail item transaksi: order_id -> list item
   final Map<String, List<OrderItemModel>> _orderItemsCache = {};
   final Map<String, bool> _loadingOrderItems = {};
+  final Set<String> _dismissedOrderIds = {};
 
   bool get _isAdmin {
     final userPrefs = serviceLocator<UserPreference>();
@@ -498,9 +499,10 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
       itemCount: transactions.length,
       itemBuilder: (context, index) {
         final tx = transactions[index];
+        if (_dismissedOrderIds.contains(tx.id)) return const SizedBox.shrink();
         final isExpanded = _expandedTransactions[tx.id] ?? false;
 
-        return Container(
+        final itemCard = Container(
           margin: const EdgeInsets.only(bottom: spacing3),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.02),
@@ -699,6 +701,152 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
               ],
             ],
           ),
+        );
+
+        return Dismissible(
+          key: Key(tx.id ?? ''),
+          direction: _isAdmin
+              ? DismissDirection.endToStart
+              : DismissDirection.none,
+          background: const SizedBox(),
+          secondaryBackground: Container(
+            margin: const EdgeInsets.only(bottom: spacing3),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+            ),
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.delete_outline_rounded,
+                    color: Colors.redAccent, size: 24),
+                const SizedBox(height: 4),
+                Text('Hapus',
+                    style: xxsBold.copyWith(color: Colors.redAccent)),
+              ],
+            ),
+          ),
+          confirmDismiss: (direction) async {
+            HapticFeedback.mediumImpact();
+            return await showDialog<bool>(
+              context: context,
+              builder: (ctx) => Dialog(
+                backgroundColor: const Color(0xFF2A1A0A),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                child: Container(
+                  padding: const EdgeInsets.all(spacing5),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: Colors.white.withOpacity(0.08), width: 1.2),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Hapus Riwayat Transaksi?',
+                          style: mdBold.copyWith(color: Colors.white)),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Transaksi ${tx.invoiceNumber} sebesar ${NumberFormat.currency(locale: "id_ID", symbol: "Rp ", decimalDigits: 0).format(tx.totalAmount)} akan dihapus secara permanen.',
+                        style: sMedium.copyWith(color: Colors.white70),
+                      ),
+                      const SizedBox(height: spacing5),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              style: OutlinedButton.styleFrom(
+                                side:
+                                    const BorderSide(color: Colors.white30),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: spacing3),
+                              ),
+                              child: Text('Batal',
+                                  style:
+                                      sBold.copyWith(color: Colors.white70)),
+                            ),
+                          ),
+                          const SizedBox(width: spacing3),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.redAccent,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: spacing3),
+                              ),
+                              child: Text('Hapus',
+                                  style: sBold.copyWith(color: Colors.white)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ) ?? false;
+          },
+          onDismissed: (direction) {
+            final messenger = ScaffoldMessenger.of(context);
+            final invoiceNum = tx.invoiceNumber;
+            final orderId = tx.id!;
+
+            setState(() => _dismissedOrderIds.add(orderId));
+
+            serviceLocator<OrderRepository>()
+                .deleteOrder(orderId)
+                .then((_) {
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(SnackBar(
+                    backgroundColor: const Color(0xFF2D8A4E),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    content: Row(children: [
+                      const Icon(Icons.check_circle_rounded,
+                          color: Colors.white, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: Text('Transaksi $invoiceNum berhasil dihapus.',
+                              style: const TextStyle(color: Colors.white))),
+                    ]),
+                  ));
+                  if (mounted) _fetchHistoryData();
+                })
+                .catchError((e) {
+                  // Kembalikan item jika gagal
+                  if (mounted) {
+                    setState(() => _dismissedOrderIds.remove(orderId));
+                  }
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(SnackBar(
+                    backgroundColor: const Color(0xFFE04040),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    content: Row(children: [
+                      const Icon(Icons.error_rounded,
+                          color: Colors.white, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: Text('Gagal menghapus transaksi: $e',
+                              style: const TextStyle(color: Colors.white))),
+                    ]),
+                  ));
+                });
+          },
+          child: itemCard,
         );
       },
     );

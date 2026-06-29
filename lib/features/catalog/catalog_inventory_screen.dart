@@ -49,6 +49,9 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   // Kategori bahan baku
   final List<String> _ingredientCategories = ["Semua", "Bubuk & Kopi", "Sirup"];
 
+  // // kategory menu penjualan
+  // final List<String> _menuCategories = ['Semua', 'coffee', 'milk', 'tea'];
+
   @override
   void initState() {
     super.initState();
@@ -1058,9 +1061,7 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                         ),
 
                         // Action Button
-                        if ((!isOffline || _tabController.index == 1) &&
-                            (_tabController.index == 1 ||
-                                categoriesList.isNotEmpty))
+                        if (_isAdmin && !isOffline)
                           GestureDetector(
                             onTap: () {
                               if (_tabController.index == 0) {
@@ -1444,9 +1445,10 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
     final stats = _getIngredientStats(ingredients);
     final filtered = ingredients.where((i) {
       if (_dismissedIngredientIds.contains(i.id)) return false;
-      
+
       // Filter kategori
-      final matchesCategory = _selectedIngredientCategory == "Semua" ||
+      final matchesCategory =
+          _selectedIngredientCategory == "Semua" ||
           i.category.toLowerCase() == _selectedIngredientCategory.toLowerCase();
       if (!matchesCategory) return false;
 
@@ -1798,7 +1800,10 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
             children: [
               Text(
                 label,
-                style: xxsBold.copyWith(color: Colors.white, letterSpacing: 0.5),
+                style: xxsBold.copyWith(
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
               ),
               const SizedBox(height: 4),
               Text(value, style: mdBold.copyWith(color: color)),

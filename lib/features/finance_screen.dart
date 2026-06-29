@@ -202,7 +202,11 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   bool _isWithinDateRange(DateTime date) {
     final localDate = date.toLocal();
-    final target = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final target = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
     final itemDate = DateTime(localDate.year, localDate.month, localDate.day);
     return itemDate.isAtSameMomentAs(target);
   }
@@ -244,7 +248,15 @@ class _FinanceScreenState extends State<FinanceScreen>
     } else if (checkDate.isAtSameMomentAs(yesterday)) {
       return "Kemarin ($dateStr)";
     } else {
-      final weekdays = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+      final weekdays = [
+        "Senin",
+        "Selasa",
+        "Rabu",
+        "Kamis",
+        "Jumat",
+        "Sabtu",
+        "Minggu",
+      ];
       final dayName = weekdays[date.weekday - 1];
       return "$dayName, $dateStr";
     }
@@ -253,7 +265,11 @@ class _FinanceScreenState extends State<FinanceScreen>
   bool _canGoToNextDay() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final current = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final current = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
     return current.isBefore(today);
   }
 
@@ -268,25 +284,16 @@ class _FinanceScreenState extends State<FinanceScreen>
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(100),
           color: Colors.white.withValues(alpha: 0.04),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
-          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.today_rounded,
-              color: primaryColor,
-              size: 16,
-            ),
+            const Icon(Icons.today_rounded, color: primaryColor, size: 16),
             const SizedBox(width: spacing2 + 2),
             Text(
               "Hari Ini: ${DateFormat('dd MMM yyyy').format(DateTime.now())}",
-              style: sBold.copyWith(
-                color: Colors.white,
-                letterSpacing: -0.1,
-              ),
+              style: sBold.copyWith(color: Colors.white, letterSpacing: -0.1),
             ),
           ],
         ),
@@ -313,9 +320,7 @@ class _FinanceScreenState extends State<FinanceScreen>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.03),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: const Icon(
                 Icons.chevron_left_rounded,
@@ -334,7 +339,8 @@ class _FinanceScreenState extends State<FinanceScreen>
                 context: context,
                 initialDate: _selectedDate,
                 firstDate: DateTime(2020),
-                lastDate: DateTime.now(), // Membatasi tanggal maksimal adalah HARI INI
+                lastDate:
+                    DateTime.now(), // Membatasi tanggal maksimal adalah HARI INI
                 builder: (context, child) {
                   return Theme(
                     data: Theme.of(context).copyWith(
@@ -365,9 +371,7 @@ class _FinanceScreenState extends State<FinanceScreen>
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(100),
                 color: Colors.white.withValues(alpha: 0.04),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -397,7 +401,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                 ? () {
                     HapticFeedback.lightImpact();
                     setState(() {
-                      _selectedDate = _selectedDate.add(const Duration(days: 1));
+                      _selectedDate = _selectedDate.add(
+                        const Duration(days: 1),
+                      );
                     });
                     _fetchFinanceData();
                   }
@@ -655,7 +661,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                                       surface: Color(0xFF2A1A0A),
                                       onSurface: Colors.white,
                                     ),
-                                    dialogBackgroundColor: const Color(0xFF1C1207),
+                                    dialogBackgroundColor: const Color(
+                                      0xFF1C1207,
+                                    ),
                                   ),
                                   child: child!,
                                 );
@@ -683,7 +691,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  DateFormat('dd MMMM yyyy').format(selectedDate),
+                                  DateFormat(
+                                    'dd MMMM yyyy',
+                                  ).format(selectedDate),
                                   style: sMedium.copyWith(color: Colors.white),
                                 ),
                                 const Icon(
@@ -785,14 +795,17 @@ class _FinanceScreenState extends State<FinanceScreen>
                                       builder: (dCtx) {
                                         dialogCtx = dCtx;
                                         return const Center(
-                                          child: CircularProgressIndicator(color: primaryColor),
+                                          child: CircularProgressIndicator(
+                                            color: primaryColor,
+                                          ),
                                         );
                                       },
                                     );
 
                                     try {
                                       // Simpan ke database Supabase
-                                      await serviceLocator<ExpenseRepository>().addExpense(newExp);
+                                      await serviceLocator<ExpenseRepository>()
+                                          .addExpense(newExp);
 
                                       // Tutup loading dialog
                                       if (dialogCtx != null) {
@@ -926,7 +939,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                         ),
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: spacing3,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.03),
                             borderRadius: BorderRadius.circular(12),
@@ -939,8 +954,11 @@ class _FinanceScreenState extends State<FinanceScreen>
                             style: sMedium.copyWith(color: Colors.white),
                             decoration: InputDecoration(
                               border: InputBorder.none,
-                              hintText: "Contoh: Penjualan Kopi Bubuk, Event offline",
-                              hintStyle: sMedium.copyWith(color: Colors.white24),
+                              hintText:
+                                  "Contoh: Penjualan Kopi Bubuk, Event offline",
+                              hintStyle: sMedium.copyWith(
+                                color: Colors.white24,
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -959,7 +977,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                         ),
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: spacing3,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.03),
                             borderRadius: BorderRadius.circular(12),
@@ -977,7 +997,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                             decoration: InputDecoration(
                               border: InputBorder.none,
                               hintText: "Contoh: 50000",
-                              hintStyle: sMedium.copyWith(color: Colors.white24),
+                              hintStyle: sMedium.copyWith(
+                                color: Colors.white24,
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -1010,7 +1032,8 @@ class _FinanceScreenState extends State<FinanceScreen>
                           ),
                           child: Row(
                             children: paymentMethods.map((method) {
-                              final isSelected = selectedPaymentMethod == method;
+                              final isSelected =
+                                  selectedPaymentMethod == method;
                               return Expanded(
                                 child: GestureDetector(
                                   onTap: () {
@@ -1031,7 +1054,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                                     child: Text(
                                       method,
                                       style: sBold.copyWith(
-                                        color: isSelected ? Colors.white : Colors.white38,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.white38,
                                       ),
                                     ),
                                   ),
@@ -1065,7 +1090,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                                       surface: Color(0xFF2A1A0A),
                                       onSurface: Colors.white,
                                     ),
-                                    dialogBackgroundColor: const Color(0xFF1C1207),
+                                    dialogBackgroundColor: const Color(
+                                      0xFF1C1207,
+                                    ),
                                   ),
                                   child: child!,
                                 );
@@ -1093,7 +1120,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  DateFormat('dd MMMM yyyy').format(selectedDate),
+                                  DateFormat(
+                                    'dd MMMM yyyy',
+                                  ).format(selectedDate),
                                   style: sMedium.copyWith(color: Colors.white),
                                 ),
                                 const Icon(
@@ -1114,7 +1143,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                         ),
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: spacing3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: spacing3,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.03),
                             borderRadius: BorderRadius.circular(12),
@@ -1128,8 +1159,11 @@ class _FinanceScreenState extends State<FinanceScreen>
                             style: sMedium.copyWith(color: Colors.white),
                             decoration: InputDecoration(
                               border: InputBorder.none,
-                              hintText: "Contoh: Hasil penjualan sisa event bazaar kemerdekaan",
-                              hintStyle: sMedium.copyWith(color: Colors.white24),
+                              hintText:
+                                  "Contoh: Hasil penjualan sisa event bazaar kemerdekaan",
+                              hintStyle: sMedium.copyWith(
+                                color: Colors.white24,
+                              ),
                             ),
                           ),
                         ),
@@ -1149,7 +1183,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  padding: const EdgeInsets.symmetric(vertical: spacing4),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: spacing4,
+                                  ),
                                 ),
                                 child: Text(
                                   "Batal",
@@ -1163,15 +1199,18 @@ class _FinanceScreenState extends State<FinanceScreen>
                                 onPressed: () async {
                                   if (formKey.currentState!.validate()) {
                                     final title = titleController.text.trim();
-                                    final amount = double.parse(amountController.text.trim());
+                                    final amount = double.parse(
+                                      amountController.text.trim(),
+                                    );
                                     final notes = notesController.text.trim();
 
-                                    final trxNum = "TRX-MAN-${10000 + (DateTime.now().millisecond * 7) % 90000}";
+                                    final trxNum =
+                                        "TRX-MAN-${10000 + (DateTime.now().millisecond * 7) % 90000}";
                                     final order = OrderModel(
                                       invoiceNumber: trxNum,
                                       totalAmount: amount,
                                       paymentMethod: selectedPaymentMethod,
-                              amountPaid: amount,
+                                      amountPaid: amount,
                                       change: 0,
                                       createdAt: selectedDate,
                                     );
@@ -1182,8 +1221,12 @@ class _FinanceScreenState extends State<FinanceScreen>
                                         productId: 'manual_income',
                                         quantity: 1,
                                         price: amount,
-                                        notes: title + (notes.isNotEmpty ? " - $notes" : ""),
-                                      )
+                                        notes:
+                                            title +
+                                            (notes.isNotEmpty
+                                                ? " - $notes"
+                                                : ""),
+                                      ),
                                     ];
 
                                     // Tampilkan loading dialog
@@ -1194,17 +1237,20 @@ class _FinanceScreenState extends State<FinanceScreen>
                                       builder: (dCtx) {
                                         dialogCtx = dCtx;
                                         return const Center(
-                                          child: CircularProgressIndicator(color: primaryColor),
+                                          child: CircularProgressIndicator(
+                                            color: primaryColor,
+                                          ),
                                         );
                                       },
                                     );
 
                                     try {
                                       // Simpan ke database Supabase
-                                      await serviceLocator<OrderRepository>().createOrder(
-                                        order: order,
-                                        items: items,
-                                      );
+                                      await serviceLocator<OrderRepository>()
+                                          .createOrder(
+                                            order: order,
+                                            items: items,
+                                          );
 
                                       // Tutup loading dialog
                                       if (dialogCtx != null) {
@@ -1240,7 +1286,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  padding: const EdgeInsets.symmetric(vertical: spacing4),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: spacing4,
+                                  ),
                                 ),
                                 child: Text(
                                   "Simpan",
@@ -1533,7 +1581,9 @@ class _FinanceScreenState extends State<FinanceScreen>
     }).toList();
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: primaryColor));
+      return const Center(
+        child: CircularProgressIndicator(color: primaryColor),
+      );
     }
 
     if (_errorMessage != null) {
@@ -1638,7 +1688,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                               const SizedBox(width: 8),
                               Text(
                                 dateFormatter.format(exp.createdAt!.toLocal()),
-                                style: xxsRegular.copyWith(color: Colors.white30),
+                                style: xxsRegular.copyWith(
+                                  color: Colors.white30,
+                                ),
                               ),
                             ],
                           ],
@@ -1680,7 +1732,9 @@ class _FinanceScreenState extends State<FinanceScreen>
 
         return Dismissible(
           key: Key(exp.id ?? ''),
-          direction: _isAdmin ? DismissDirection.endToStart : DismissDirection.none,
+          direction: _isAdmin
+              ? DismissDirection.endToStart
+              : DismissDirection.none,
           secondaryBackground: _buildDismissibleBackground(),
           background: const SizedBox(),
           confirmDismiss: (direction) async {
@@ -1688,30 +1742,74 @@ class _FinanceScreenState extends State<FinanceScreen>
             final confirm = await _showDeleteExpenseConfirmation(exp);
             return confirm ?? false;
           },
-          onDismissed: (direction) async {
+          onDismissed: (direction) {
+            final messenger = ScaffoldMessenger.of(context);
+            final expTitle = exp.title;
+            final expId = exp.id!;
+
             // Update UI state optimistically
             setState(() {
-              _expenses.removeWhere((item) => item.id == exp.id);
+              _expenses.removeWhere((item) => item.id == expId);
             });
 
-            try {
-              // Delete from Supabase
-              await serviceLocator<ExpenseRepository>().deleteExpense(exp.id!);
-
-              if (!mounted) return;
-              CustomFeedback.showSuccess(
-                context,
-                "Catatan pengeluaran '${exp.title}' berhasil dihapus.",
-              );
-              _fetchFinanceData();
-            } catch (e) {
-              if (!mounted) return;
-              CustomFeedback.showError(
-                context,
-                "Gagal menghapus pengeluaran: $e",
-              );
-              _fetchFinanceData(); // Reload to restore item in UI
-            }
+            serviceLocator<ExpenseRepository>()
+                .deleteExpense(expId)
+                .then((_) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFF2D8A4E),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      content: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Pengeluaran '$expTitle' berhasil dihapus.",
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                  if (mounted) _fetchFinanceData();
+                })
+                .catchError((e) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFFE04040),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      content: Row(
+                        children: [
+                          const Icon(
+                            Icons.error_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Gagal menghapus pengeluaran: $e",
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                  if (mounted) _fetchFinanceData();
+                });
           },
           child: itemWidget,
         );
@@ -1726,7 +1824,9 @@ class _FinanceScreenState extends State<FinanceScreen>
     }).toList();
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: primaryColor));
+      return const Center(
+        child: CircularProgressIndicator(color: primaryColor),
+      );
     }
 
     if (_errorMessage != null) {
@@ -1775,7 +1875,10 @@ class _FinanceScreenState extends State<FinanceScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(tx.invoiceNumber, style: sBold.copyWith(color: Colors.white)),
+                    Text(
+                      tx.invoiceNumber,
+                      style: sBold.copyWith(color: Colors.white),
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [

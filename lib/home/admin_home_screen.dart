@@ -119,7 +119,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
     try {
       final connectivityResult = await Connectivity().checkConnectivity();
-      final isOnline = connectivityResult.any((r) => r != ConnectivityResult.none);
+      final isOnline = connectivityResult.any(
+        (r) => r != ConnectivityResult.none,
+      );
 
       if (!isOnline) {
         await _loadOfflineDashboardCache();
@@ -371,7 +373,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         'todaySalesAmount': todaySalesSum,
         'lastSyncTime': DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now()),
       };
-      await serviceLocator<OfflineStorageService>().saveDashboardCache(cacheData);
+      await serviceLocator<OfflineStorageService>().saveDashboardCache(
+        cacheData,
+      );
 
       setState(() {
         _weeklySalesData = newWeeklySalesData;
@@ -389,24 +393,42 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     } catch (e) {
       await _loadOfflineDashboardCache();
       if (mounted) {
-        CustomFeedback.showInfo(context, "Terhubung offline. Menampilkan data cache.");
+        CustomFeedback.showInfo(
+          context,
+          "Terhubung offline. Menampilkan data cache.",
+        );
       }
     }
   }
 
   Future<void> _loadOfflineDashboardCache() async {
     try {
-      final cache = await serviceLocator<OfflineStorageService>().getDashboardCache();
+      final cache = await serviceLocator<OfflineStorageService>()
+          .getDashboardCache();
       if (cache != null) {
         setState(() {
-          _weeklySalesData = List<double>.from(cache['weeklySalesData'] ?? [0, 0, 0, 0, 0, 0, 0]);
-          _weeklySalesDays = List<String>.from(cache['weeklySalesDays'] ?? ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']);
+          _weeklySalesData = List<double>.from(
+            cache['weeklySalesData'] ?? [0, 0, 0, 0, 0, 0, 0],
+          );
+          _weeklySalesDays = List<String>.from(
+            cache['weeklySalesDays'] ??
+                ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'],
+          );
           _weeklyGrowthLabel = cache['weeklyGrowthLabel'] ?? "0%";
-          _weeklyGrowthColor = Color(cache['weeklyGrowthColor'] ?? Colors.white30.value);
-          _recentTransactions = List<Map<String, dynamic>>.from(cache['recentTransactions'] ?? []);
-          _bestSellers = List<Map<String, dynamic>>.from(cache['bestSellers'] ?? []);
-          _lowStockItems = List<Map<String, dynamic>>.from(cache['lowStockItems'] ?? []);
-          _todaySalesAmount = (cache['todaySalesAmount'] as num?)?.toDouble() ?? 0.0;
+          _weeklyGrowthColor = Color(
+            cache['weeklyGrowthColor'] ?? Colors.white30.value,
+          );
+          _recentTransactions = List<Map<String, dynamic>>.from(
+            cache['recentTransactions'] ?? [],
+          );
+          _bestSellers = List<Map<String, dynamic>>.from(
+            cache['bestSellers'] ?? [],
+          );
+          _lowStockItems = List<Map<String, dynamic>>.from(
+            cache['lowStockItems'] ?? [],
+          );
+          _todaySalesAmount =
+              (cache['todaySalesAmount'] as num?)?.toDouble() ?? 0.0;
           _isOfflineMode = true;
           _lastSyncTime = cache['lastSyncTime'] ?? "";
           _isLoadingDashboard = false;
@@ -608,12 +630,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             bottom: false,
             child: Column(
               children: [
-                 _buildHeader(context),
+                _buildHeader(context),
                 if (_isOfflineMode) ...[
                   const SizedBox(height: spacing2),
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: spacing6),
-                    padding: const EdgeInsets.symmetric(horizontal: spacing4, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: spacing4,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFF9E22).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
@@ -634,7 +659,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                             _lastSyncTime.isNotEmpty
                                 ? "Mode Offline - Sinkronisasi terakhir: $_lastSyncTime"
                                 : "Mode Offline - Koneksi terputus",
-                            style: xxsMedium.copyWith(color: const Color(0xFFFFB74D)),
+                            style: xxsMedium.copyWith(
+                              color: const Color(0xFFFFB74D),
+                            ),
                           ),
                         ),
                       ],
@@ -1112,9 +1139,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: spacing4,
-                vertical: spacing3,
+              padding: const EdgeInsets.only(
+                left: spacing4,
+                right: spacing4,
+                top: 0,
+                bottom: 0,
               ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
@@ -1178,6 +1207,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
                   return ListView.separated(
                     shrinkWrap: true,
+                    padding: EdgeInsets.zero,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: displayedShifts.length,
                     separatorBuilder: (context, index) => Divider(
@@ -1187,9 +1217,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     itemBuilder: (context, index) {
                       final shift = displayedShifts[index];
                       final roleColor = _getRoleColor(shift.employeeRole);
-                      final formattedTime = timeFormatter.format(
-                        shift.clockIn.toLocal(),
-                      );
+                      var clockInTime = shift.clockIn.toLocal();
+                      if (clockInTime.isAfter(DateTime.now())) {
+                        clockInTime = clockInTime.subtract(
+                          clockInTime.timeZoneOffset,
+                        );
+                      }
+                      final formattedTime = timeFormatter.format(clockInTime);
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: spacing3),
@@ -1233,24 +1267,24 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                 ],
                               ),
                             ),
-                            if (shift.id != null)
-                              IconButton(
-                                icon: Icon(
-                                  Icons.delete_outline_rounded,
-                                  color: const Color(
-                                    0xFFFF6B6B,
-                                  ).withValues(alpha: 0.6),
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  _deleteStaffShiftDialog(
-                                    context,
-                                    shift.id!,
-                                    shift.employeeName ?? "Staf",
-                                  );
-                                },
-                                tooltip: "Hapus Catatan Shift",
-                              ),
+                            // if (shift.id != null)
+                            //   IconButton(
+                            //     icon: Icon(
+                            //       Icons.delete_outline_rounded,
+                            //       color: const Color(
+                            //         0xFFFF6B6B,
+                            //       ).withValues(alpha: 0.6),
+                            //       size: 20,
+                            //     ),
+                            //     onPressed: () {
+                            //       _deleteStaffShiftDialog(
+                            //         context,
+                            //         shift.id!,
+                            //         shift.employeeName ?? "Staf",
+                            //       );
+                            //     },
+                            //     tooltip: "Hapus Catatan Shift",
+                            //   ),
                           ],
                         ),
                       );
@@ -1282,9 +1316,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: spacing4,
-                vertical: spacing3,
+              padding: const EdgeInsets.only(
+                left: spacing4,
+                right: spacing4,
+                top: 0,
+                bottom: 0,
               ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
@@ -1306,6 +1342,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     )
                   : ListView.separated(
                       shrinkWrap: true,
+                      padding: EdgeInsets.zero,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _bestSellers.length,
                       separatorBuilder: (context, index) => Divider(
@@ -1429,11 +1466,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         ClipRRect(
           borderRadius: BorderRadius.circular(18),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 11),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: spacing4,
-                vertical: spacing3,
+              padding: const EdgeInsets.only(
+                left: spacing4,
+                right: spacing4,
+                top: 0,
+                bottom: 0,
               ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
@@ -1455,6 +1494,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     )
                   : ListView.separated(
                       shrinkWrap: true,
+                      padding: EdgeInsets.zero,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _lowStockItems.length,
                       separatorBuilder: (context, index) => Divider(
@@ -1585,9 +1625,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: spacing4,
-                vertical: spacing3,
+              padding: const EdgeInsets.only(
+                left: spacing4,
+                right: spacing4,
+                top: 0,
+                bottom: 0,
               ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
@@ -1609,6 +1651,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     )
                   : ListView.separated(
                       shrinkWrap: true,
+                      padding: EdgeInsets.zero,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _recentTransactions.length,
                       separatorBuilder: (context, index) => Divider(
