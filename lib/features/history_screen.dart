@@ -16,6 +16,10 @@ import 'package:maucoffee/model/order_item_model.dart';
 import 'package:maucoffee/model/stock_log_model.dart';
 import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
 import 'package:maucoffee/features/catalog/cubit/catalog_state.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:maucoffee/services/offline_storage_service.dart';
 import 'package:maucoffee/model/product_model.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -101,29 +105,99 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
       _errorMessage = null;
     });
 
+    final prefs = await SharedPreferences.getInstance();
+    final offlineStorage = serviceLocator<OfflineStorageService>();
+
+    List<OrderModel> onlineOrders = [];
+    List<StockLogModel> onlineStockLogs = [];
+    bool fetchSuccess = false;
+
     try {
-      final orderRepo = serviceLocator<OrderRepository>();
-      final ingredientRepo = serviceLocator<IngredientRepository>();
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOnline = connectivityResult.any((r) => r != ConnectivityResult.none);
 
-      // Muat data orders & stock logs secara paralel
-      final results = await Future.wait([
-        orderRepo.getOrderHistory(),
-        ingredientRepo.getStockLogs(),
-      ]);
+      if (isOnline) {
+        final orderRepo = serviceLocator<OrderRepository>();
+        final ingredientRepo = serviceLocator<IngredientRepository>();
 
-      if (!mounted) return;
-      setState(() {
-        _orders = results[0] as List<OrderModel>;
-        _stockLogs = results[1] as List<StockLogModel>;
-        _isLoading = false;
-      });
+        // Muat data orders & stock logs secara paralel dengan timeout 3 detik
+        final results = await Future.wait([
+          orderRepo.getOrderHistory().timeout(const Duration(seconds: 3)),
+          ingredientRepo.getStockLogs().timeout(const Duration(seconds: 3)),
+        ]);
+
+        onlineOrders = results[0] as List<OrderModel>;
+        onlineStockLogs = results[1] as List<StockLogModel>;
+        fetchSuccess = true;
+
+        // Simpan data terbaru ke cache SharedPreferences lokal
+        final List<String> cachedOrdersJson = onlineOrders.map((o) => json.encode(o.toJson())).toList();
+        final List<String> cachedStockLogsJson = onlineStockLogs.map((s) => json.encode(s.toJson())).toList();
+        await prefs.setStringList("history_cached_orders", cachedOrdersJson);
+        await prefs.setStringList("history_cached_stock_logs", cachedStockLogsJson);
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.toString();
-        _isLoading = false;
-      });
+      debugPrint("Gagal mengambil riwayat online: $e");
     }
+
+    // Jika pemanggilan online gagal atau sedang offline, gunakan data cache lokal
+    if (!fetchSuccess) {
+      try {
+        final List<String> cachedOrdersJson = prefs.getStringList("history_cached_orders") ?? [];
+        final List<String> cachedStockLogsJson = prefs.getStringList("history_cached_stock_logs") ?? [];
+
+        onlineOrders = cachedOrdersJson
+            .map((item) => OrderModel.fromJson(json.decode(item) as Map<String, dynamic>))
+            .toList();
+
+        onlineStockLogs = cachedStockLogsJson
+            .map((item) => StockLogModel.fromJson(json.decode(item) as Map<String, dynamic>))
+            .toList();
+      } catch (err) {
+        debugPrint("Gagal memuat cache riwayat lokal: $err");
+      }
+    }
+
+    // Selalu gabungkan dengan daftar transaksi offline (Offline Queue) yang belum di-sync
+    try {
+      final offlineQueue = await offlineStorage.getOrderQueue();
+      final List<OrderModel> offlineOrders = [];
+
+      for (var queueData in offlineQueue) {
+        final orderMap = queueData['order'] as Map<String, dynamic>;
+        
+        // Buat objek OrderModel dari antrean offline
+        final offlineOrder = OrderModel.fromJson(orderMap);
+        
+        // Kita modifikasi paymentMethod agar ada visual "(Offline)" yang menandakan belum di-sync
+        final markedOrder = OrderModel(
+          id: offlineOrder.id,
+          adminId: offlineOrder.adminId,
+          invoiceNumber: offlineOrder.invoiceNumber,
+          totalAmount: offlineOrder.totalAmount,
+          paymentMethod: "${offlineOrder.paymentMethod} (Offline)",
+          amountPaid: offlineOrder.amountPaid,
+          change: offlineOrder.change,
+          qrisProofUrl: offlineOrder.qrisProofUrl,
+          cashierId: offlineOrder.cashierId,
+          createdAt: offlineOrder.createdAt,
+        );
+
+        offlineOrders.add(markedOrder);
+      }
+
+      // Gabungkan order offline ke bagian atas list
+      onlineOrders.insertAll(0, offlineOrders);
+    } catch (err) {
+      debugPrint("Gagal memproses antrean transaksi offline: $err");
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _orders = onlineOrders;
+      _stockLogs = onlineStockLogs;
+      _isLoading = false;
+    });
   }
 
   Future<void> _loadOrderItems(String orderId) async {
@@ -134,6 +208,35 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     setState(() {
       _loadingOrderItems[orderId] = true;
     });
+
+    if (orderId.startsWith("offline-")) {
+      try {
+        final offlineStorage = serviceLocator<OfflineStorageService>();
+        final queue = await offlineStorage.getOrderQueue();
+        
+        final match = queue.firstWhere(
+          (q) => q['order']['id'] == orderId,
+          orElse: () => <String, dynamic>{},
+        );
+
+        if (match.isNotEmpty) {
+          final itemsList = match['items'] as List<dynamic>;
+          final items = itemsList
+              .map((json) => OrderItemModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+
+          if (mounted) {
+            setState(() {
+              _orderItemsCache[orderId] = items;
+              _loadingOrderItems[orderId] = false;
+            });
+          }
+          return;
+        }
+      } catch (err) {
+        debugPrint("Gagal memuat item offline dari storage lokal: $err");
+      }
+    }
 
     try {
       final orderRepo = serviceLocator<OrderRepository>();

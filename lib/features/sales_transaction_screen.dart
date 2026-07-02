@@ -20,6 +20,8 @@ import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/repository/order_repository.dart';
 import 'package:maucoffee/model/order_model.dart';
 import 'package:maucoffee/model/order_item_model.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:maucoffee/services/offline_storage_service.dart';
 
 class SalesTransactionScreen extends StatefulWidget {
   const SalesTransactionScreen({super.key});
@@ -301,8 +303,9 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
         itemCount: categoryItems.length,
         itemBuilder: (context, index) {
           final item = categoryItems[index];
-          final String label =
-              item is String ? item : (item as CategoryModel).name;
+          final String label = item is String
+              ? item
+              : (item as CategoryModel).name;
           final String id = item is String ? item : (item as CategoryModel).id!;
 
           final bool isSelected = _selectedCategoryId == id;
@@ -386,8 +389,8 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                     ),
                   ),
                   alignment: Alignment.center,
-                  child: product.imageUrl != null &&
-                          product.imageUrl!.isNotEmpty
+                  child:
+                      product.imageUrl != null && product.imageUrl!.isNotEmpty
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: CachedNetworkImage(
@@ -437,8 +440,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                       Text(
                         "$categoryName • ${currencyFormatter.format(product.price)}",
                         style: xsMedium.copyWith(
-                          color:
-                              isCartFull ? Colors.redAccent : Colors.white60,
+                          color: isCartFull ? Colors.redAccent : Colors.white60,
                         ),
                       ),
                     ],
@@ -1100,51 +1102,109 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: primaryColor),
-      ),
+      builder: (context) =>
+          const Center(child: CircularProgressIndicator(color: primaryColor)),
     );
+
+    // Cek koneksi internet untuk fallback offline langsung
+    final connectivityResult = await Connectivity().checkConnectivity();
+    final isOnline = connectivityResult.any(
+      (r) => r != ConnectivityResult.none,
+    );
+
+    // Buat objek order dan detail item terlebih dahulu
+    final double totalVal = _getCartTotal();
+    final order = OrderModel(
+      id: "offline-${trxNum}-${DateTime.now().millisecondsSinceEpoch}",
+      createdAt: DateTime.now(),
+      invoiceNumber: trxNum,
+      totalAmount: totalVal,
+      paymentMethod: method,
+      amountPaid: method == "QRIS" ? totalVal : paidAmount,
+      change: method == "QRIS" ? 0.0 : change,
+    );
+
+    final List<OrderItemModel> items = [];
+    _cart.forEach((id, qty) {
+      final product = _loadedProducts.firstWhere(
+        (p) => p.id == id,
+        orElse: () =>
+            ProductModel(id: id, categoryId: '', name: 'Unknown', price: 0),
+      );
+      items.add(
+        OrderItemModel(
+          orderId: '',
+          productId: id,
+          quantity: qty,
+          price: product.price,
+        ),
+      );
+    });
+
+    if (!isOnline) {
+      // Offline langsung - Simpan ke offline queue
+      final queueItem = {
+        'id': trxNum,
+        'order': order.toJson(),
+        'items': items.map((i) => i.toJson()).toList(),
+      };
+      await serviceLocator<OfflineStorageService>().saveOrderQueue(queueItem);
+
+      if (mounted) {
+        Navigator.pop(context); // Tutup loading dialog
+      }
+
+      // Tampilkan dialog sukses transaksi offline
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => TransactionSuccessDialog(
+            transactionNumber: trxNum,
+            onFinish: () {},
+          ),
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _cart.clear();
+            });
+            CustomFeedback.showSuccess(
+              context,
+              "Transaksi disimpan offline! Silakan sinkronkan nanti.",
+            );
+          }
+        });
+      }
+      return;
+    }
 
     try {
       String? qrisProofUrl;
       // Upload bukti QRIS jika menggunakan QRIS dan ada path gambarnya
-      if (method == "QRIS" && qrisProofPath != null && qrisProofPath.isNotEmpty) {
+      if (method == "QRIS" &&
+          qrisProofPath != null &&
+          qrisProofPath.isNotEmpty) {
         final file = File(qrisProofPath);
-        final fileName = "qris_${trxNum}_${DateTime.now().millisecondsSinceEpoch}.jpg";
-        qrisProofUrl = await serviceLocator<OrderRepository>().uploadQrisProof(file, fileName);
+        final fileName =
+            "qris_${trxNum}_${DateTime.now().millisecondsSinceEpoch}.jpg";
+        qrisProofUrl = await serviceLocator<OrderRepository>()
+            .uploadQrisProof(file, fileName)
+            .timeout(const Duration(seconds: 5));
       }
 
-      // Hitung total belanja
-      final double totalVal = _getCartTotal();
-
-      // Buat OrderModel
-      final order = OrderModel(
-        invoiceNumber: trxNum,
-        totalAmount: totalVal,
-        paymentMethod: method,
-        amountPaid: method == "QRIS" ? totalVal : paidAmount,
-        change: method == "QRIS" ? 0.0 : change,
+      final finalOrder = OrderModel(
+        invoiceNumber: order.invoiceNumber,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        amountPaid: order.amountPaid,
+        change: order.change,
         qrisProofUrl: qrisProofUrl,
       );
 
-      // Buat List OrderItemModel
-      final List<OrderItemModel> items = [];
-      _cart.forEach((id, qty) {
-        final product = _loadedProducts.firstWhere(
-          (p) => p.id == id,
-          orElse: () =>
-              ProductModel(id: id, categoryId: '', name: 'Unknown', price: 0),
-        );
-        items.add(OrderItemModel(
-          orderId: '', // Akan diset oleh OrderRepository
-          productId: id,
-          quantity: qty,
-          price: product.price,
-        ));
-      });
-
       // Simpan ke Supabase database
-      await serviceLocator<OrderRepository>().createOrder(order: order, items: items);
+      await serviceLocator<OrderRepository>()
+          .createOrder(order: finalOrder, items: items)
+          .timeout(const Duration(seconds: 5));
 
       if (mounted) {
         Navigator.pop(context); // Tutup loading dialog
@@ -1155,8 +1215,10 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
         showDialog(
           context: context,
           barrierDismissible: true,
-          builder: (ctx) =>
-              TransactionSuccessDialog(transactionNumber: trxNum, onFinish: () {}),
+          builder: (ctx) => TransactionSuccessDialog(
+            transactionNumber: trxNum,
+            onFinish: () {},
+          ),
         ).then((_) {
           if (mounted) {
             setState(() {
@@ -1168,74 +1230,100 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
         });
       }
     } catch (e) {
+      debugPrint(
+        "Gagal kirim transaksi online, fallback ke antrean offline: $e",
+      );
+
+      // Fallback: simpan ke antrean offline karena timeout/jaringan terganggu
+      final queueItem = {
+        'id': trxNum,
+        'order': order.toJson(),
+        'items': items.map((i) => i.toJson()).toList(),
+      };
+      await serviceLocator<OfflineStorageService>().saveOrderQueue(queueItem);
+
       if (mounted) {
         Navigator.pop(context); // Tutup loading dialog
-        CustomFeedback.showError(context, "Transaksi gagal: ${e.toString()}");
+      }
+
+      // Tampilkan dialog sukses transaksi offline
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => TransactionSuccessDialog(
+            transactionNumber: trxNum,
+            onFinish: () {},
+          ),
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _cart.clear();
+            });
+            CustomFeedback.showSuccess(
+              context,
+              "Koneksi terganggu. Transaksi disimpan offline lokal!",
+            );
+          }
+        });
       }
     }
   }
 
   List<double> _getSuggestions(double totalPrice) {
-    final double T = totalPrice;
-    final List<double> suggestions = [];
+  final double T = totalPrice;
+  final List<double> suggestions = [];
 
-    // 1. Selalu sertakan uang pas
-    suggestions.add(T);
+  // 1. Selalu sertakan uang pas
+  suggestions.add(T);
 
-    // Pecahan uang standar Rupiah
-    final List<double> standardNotes = [
-      2000,
-      5000,
-      10000,
-      20000,
-      50000,
-      100000,
-    ];
+  // Pecahan uang standar Rupiah
+  final List<double> standardNotes = [2000, 5000, 10000, 20000, 50000, 100000];
 
-    // 2. Tambahkan pecahan standar yang lebih besar dari T
-    for (var note in standardNotes) {
-      if (note > T) {
-        suggestions.add(note);
-      }
+  // 2. Tambahkan pecahan standar yang lebih besar dari T
+  for (var note in standardNotes) {
+    if (note > T) {
+      suggestions.add(note);
     }
-
-    // 3. Tambahkan kelipatan bulat terdekat ke atas secara cerdas
-    if (T > 0) {
-      // Kelipatan 5.000 terdekat ke atas (jika T > 5000)
-      if (T > 5000) {
-        double next5k = ((T / 5000).ceil() * 5000).toDouble();
-        if (next5k > T) suggestions.add(next5k);
-      }
-
-      // Kelipatan 10.000 terdekat ke atas
-      double next10k = ((T / 10000).ceil() * 10000).toDouble();
-      if (next10k > T) suggestions.add(next10k);
-
-      // Kelipatan 20.000 terdekat ke atas
-      double next20k = ((T / 20000).ceil() * 20000).toDouble();
-      if (next20k > T) suggestions.add(next20k);
-
-      // Kelipatan 50.000 terdekat ke atas (jika T > 20000)
-      if (T > 20000) {
-        double next50k = ((T / 50000).ceil() * 50000).toDouble();
-        if (next50k > T) suggestions.add(next50k);
-      }
-
-      // Kelipatan 100.000 terdekat ke atas (jika T > 50000)
-      if (T > 50000) {
-        double next100k = ((T / 100000).ceil() * 100000).toDouble();
-        if (next100k > T) suggestions.add(next100k);
-      }
-    }
-
-    // Hapus duplikat, filter hanya nilai >= T, dan urutkan
-    final List<double> sorted = suggestions
-        .toSet()
-        .where((val) => val >= T)
-        .toList();
-    sorted.sort();
-
-    // Batasi maksimal 5 saran nominal agar UI tetap rapi
-    return sorted.take(5).toList();
   }
+
+  // 3. Tambahkan kelipatan bulat terdekat ke atas secara cerdas
+  if (T > 0) {
+    // Kelipatan 5.000 terdekat ke atas (jika T > 5000)
+    if (T > 5000) {
+      double next5k = ((T / 5000).ceil() * 5000).toDouble();
+      if (next5k > T) suggestions.add(next5k);
+    }
+
+    // Kelipatan 10.000 terdekat ke atas
+    double next10k = ((T / 10000).ceil() * 10000).toDouble();
+    if (next10k > T) suggestions.add(next10k);
+
+    // Kelipatan 20.000 terdekat ke atas
+    double next20k = ((T / 20000).ceil() * 20000).toDouble();
+    if (next20k > T) suggestions.add(next20k);
+
+    // Kelipatan 50.000 terdekat ke atas (jika T > 20000)
+    if (T > 20000) {
+      double next50k = ((T / 50000).ceil() * 50000).toDouble();
+      if (next50k > T) suggestions.add(next50k);
+    }
+
+    // Kelipatan 100.000 terdekat ke atas (jika T > 50000)
+    if (T > 50000) {
+      double next100k = ((T / 100000).ceil() * 100000).toDouble();
+      if (next100k > T) suggestions.add(next100k);
+    }
+  }
+
+  // Hapus duplikat, filter hanya nilai >= T, dan urutkan
+  final List<double> sorted = suggestions
+      .toSet()
+      .where((val) => val >= T)
+      .toList();
+  sorted.sort();
+
+  // Batasi maksimal 5 saran nominal agar UI tetap rapi
+  return sorted.take(5).toList();
+}
 }

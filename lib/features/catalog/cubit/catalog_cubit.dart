@@ -74,24 +74,56 @@ class CatalogCubit extends Cubit<CatalogState> {
   // Memuat data katalog (Produk, Kategori, & Bahan Baku) secara online/offline
   Future<void> fetchCatalog() async {
     debugPrint("CatalogCubit: fetchCatalog called");
+    
+    // Jika state saat ini masih awal (Initial), coba load cache offline terlebih dahulu secara instan
+    // agar data langsung tampil di UI dan tidak memicu spinner layar penuh.
+    if (state is CatalogInitial) {
+      try {
+        final cachedProductsJson = await _offlineStorageService.getProductsCache();
+        final cachedCategoriesJson = await _offlineStorageService.getCategoriesCache();
+        final cachedIngredientsJson = await _offlineStorageService.getIngredientsCache();
+
+        if (cachedProductsJson.isNotEmpty || cachedCategoriesJson.isNotEmpty || cachedIngredientsJson.isNotEmpty) {
+          final products = cachedProductsJson
+              .map((json) => ProductModel.fromJson(json))
+              .toList();
+          final categories = cachedCategoriesJson
+              .map((json) => CategoryModel.fromJson(json))
+              .toList();
+          final ingredients = cachedIngredientsJson
+              .map((json) => IngredientModel.fromJson(json))
+              .toList();
+
+          debugPrint("CatalogCubit: Initial cache loaded successfully to avoid UI blocking.");
+          emit(CatalogLoaded(
+            products: products,
+            categories: categories,
+            ingredients: ingredients,
+            isOffline: true,
+          ));
+        }
+      } catch (e) {
+        debugPrint("CatalogCubit: Failed to load initial cache: $e");
+      }
+    }
+
     _emitLoading();
     try {
-      debugPrint("CatalogCubit: loading categories from Supabase...");
-      final categories = await _categoryRepository
-          .getCategories()
-          .timeout(const Duration(seconds: 10));
+      debugPrint("CatalogCubit: loading catalog data from Supabase in parallel...");
+      
+      // Ambil ketiga data secara paralel dengan timeout 3 detik untuk performa & offline-resilience
+      final results = await Future.wait([
+        _categoryRepository.getCategories().timeout(const Duration(seconds: 3)),
+        _productRepository.getProducts().timeout(const Duration(seconds: 3)),
+        _ingredientRepository.getIngredients().timeout(const Duration(seconds: 3)),
+      ]);
+
+      final categories = results[0] as List<CategoryModel>;
+      final products = results[1] as List<ProductModel>;
+      final ingredients = results[2] as List<IngredientModel>;
+
       debugPrint("CatalogCubit: categories fetched = ${categories.length}");
-
-      debugPrint("CatalogCubit: loading products from Supabase...");
-      final products = await _productRepository
-          .getProducts()
-          .timeout(const Duration(seconds: 10));
       debugPrint("CatalogCubit: products fetched = ${products.length}");
-
-      debugPrint("CatalogCubit: loading ingredients from Supabase...");
-      final ingredients = await _ingredientRepository
-          .getIngredients()
-          .timeout(const Duration(seconds: 10));
       debugPrint("CatalogCubit: ingredients fetched = ${ingredients.length}");
 
       // Simpan data terbaru ke cache lokal

@@ -3,6 +3,9 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/repository/absensi_repository.dart';
+import 'package:maucoffee/repository/order_repository.dart';
+import 'package:maucoffee/model/order_model.dart';
+import 'package:maucoffee/model/order_item_model.dart';
 import 'offline_storage_service.dart';
 
 class SyncManager {
@@ -129,12 +132,32 @@ class SyncManager {
     _syncCompletedController.add(null);
   }
 
-  // 2. Sinkronisasi Pesanan / Orderan (placeholder masa depan)
+  // 2. Sinkronisasi Pesanan / Orderan
   Future<void> _syncOrders() async {
     final orderQueue = await _offlineStorage.getOrderQueue();
     if (orderQueue.isEmpty) return;
-    debugPrint("⏳ Mensinkronkan data orderan offline... (Staging)");
-    // TODO: implementasi repository order offline di masa depan
+    
+    debugPrint("⏳ Mensinkronkan data orderan offline... (Ditemukan ${orderQueue.length} transaksi)");
+    final orderRepo = serviceLocator<OrderRepository>();
+
+    for (var orderData in orderQueue) {
+      final localId = orderData['id'] as String;
+      try {
+        final orderMap = orderData['order'] as Map<String, dynamic>;
+        final itemsList = orderData['items'] as List<dynamic>;
+
+        final order = OrderModel.fromJson(orderMap);
+        final items = itemsList
+            .map((itemJson) => OrderItemModel.fromJson(itemJson as Map<String, dynamic>))
+            .toList();
+
+        await orderRepo.createOrder(order: order, items: items);
+        await _offlineStorage.removeOrderQueue(localId);
+        debugPrint("✅ Sinkronisasi transaksi offline $localId sukses.");
+      } catch (e) {
+        debugPrint("❌ Gagal sinkronisasi transaksi offline $localId: $e");
+      }
+    }
   }
 
   // 3. Sinkronisasi Bahan Baku / Stok (placeholder masa depan)

@@ -8,6 +8,7 @@ import 'package:maucoffee/auth/admin_scan_employee_screen.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/features/absensi/cubit/absensi_cubit.dart';
+import 'package:maucoffee/model/ingredient_model.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -128,16 +129,28 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         return;
       }
 
-      // 1. Refresh & pastikan Catalog loaded
-      await context.read<CatalogCubit>().fetchCatalog();
+      // 1. Refresh & pastikan Catalog loaded (sudah ter-optimasi timeout 3 detik di dalamnya)
+      await context.read<CatalogCubit>().fetchCatalog().timeout(
+        const Duration(seconds: 3),
+      );
       final catalogState = context.read<CatalogCubit>().state;
       List<ProductModel> products = [];
       if (catalogState is CatalogLoaded) {
         products = catalogState.products;
       }
 
-      // 2. Load orders dari OrderRepository (14 hari terakhir untuk Weekly Performance)
-      final orders = await serviceLocator<OrderRepository>().getOrderHistory();
+      // 2. Load orders & ingredients secara paralel dengan timeout 3 detik
+      final parallelData = await Future.wait([
+        serviceLocator<OrderRepository>().getOrderHistory().timeout(
+          const Duration(seconds: 3),
+        ),
+        serviceLocator<IngredientRepository>().getIngredients().timeout(
+          const Duration(seconds: 3),
+        ),
+      ]);
+
+      final orders = parallelData[0] as List<OrderModel>;
+      final ingredients = parallelData[1] as List<IngredientModel>;
       final nowLocal = DateTime.now();
 
       // Saring orders untuk 14 hari terakhir (menggunakan timezone lokal agar akurat)
@@ -257,8 +270,24 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           .where((id) => id.isNotEmpty)
           .toList();
 
-      final allRecentItems = await serviceLocator<OrderRepository>()
-          .getOrderItemsForOrders(recentOrderIds);
+      // ── PRODUK TERLARIS HARI INI (Maksimal 3 Produk) ──
+      final todayOrderIds = todayOrders
+          .map((o) => o.id ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      // Ambil detail item secara paralel dengan timeout 3 detik untuk efisiensi
+      final itemResults = await Future.wait([
+        serviceLocator<OrderRepository>()
+            .getOrderItemsForOrders(recentOrderIds)
+            .timeout(const Duration(seconds: 3)),
+        serviceLocator<OrderRepository>()
+            .getOrderItemsForOrders(todayOrderIds)
+            .timeout(const Duration(seconds: 3)),
+      ]);
+
+      final allRecentItems = itemResults[0];
+      final todayItems = itemResults[1];
 
       final List<Map<String, dynamic>> newRecentTransactions = [];
       for (var order in recentOrders) {
@@ -299,13 +328,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       }
 
       // ── PRODUK TERLARIS HARI INI (Maksimal 3 Produk) ──
-      final todayOrderIds = todayOrders
-          .map((o) => o.id ?? '')
-          .where((id) => id.isNotEmpty)
-          .toList();
-      final todayItems = await serviceLocator<OrderRepository>()
-          .getOrderItemsForOrders(todayOrderIds);
-
       final Map<String, int> productQuantities = {};
       final Map<String, double> productRevenues = {};
 
@@ -348,8 +370,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       final newBestSellers = bestSellersComputed.take(3).toList();
 
       // ── PERINGATAN STOK MENIPIS (Maksimal 5 Bahan Baku) ──
-      final ingredients = await serviceLocator<IngredientRepository>()
-          .getIngredients();
       final List<Map<String, dynamic>> newLowStockItems = [];
       for (var ingredient in ingredients) {
         if (ingredient.stock <= ingredient.minStock) {
