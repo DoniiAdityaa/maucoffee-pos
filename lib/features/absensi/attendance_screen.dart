@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/services/history_manager.dart';
-import 'package:maucoffee/features/cubit/absensi_cubit.dart';
+import 'package:maucoffee/features/absensi/cubit/absensi_cubit.dart';
 import 'package:maucoffee/model/absensi_model.dart';
 import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/ui/color.dart';
@@ -1065,9 +1065,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight,
-              ),
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

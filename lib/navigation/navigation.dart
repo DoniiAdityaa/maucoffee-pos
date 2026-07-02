@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
+import 'package:maucoffee/features/absensi/attendance_screen.dart';
 import 'package:maucoffee/home/admin_home_screen.dart';
 import 'package:maucoffee/features/sales_transaction_screen.dart';
 import 'package:maucoffee/features/catalog/catalog_inventory_screen.dart';
 import 'package:maucoffee/features/history_screen.dart';
-import 'package:maucoffee/features/attendance_screen.dart';
 import 'package:maucoffee/features/finance_screen.dart';
-import 'package:maucoffee/features/settings_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:maucoffee/features/setting/settings_screen.dart';
+import 'package:maucoffee/features/setting/cubit/setting_cubit.dart';
 import 'package:maucoffee/services/history_manager.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
@@ -37,6 +39,7 @@ class MainNavigationState extends State<MainNavigation> {
       });
     }
   }
+
   late final List<Widget> _pages;
 
   bool get _isAdmin {
@@ -67,7 +70,10 @@ class MainNavigationState extends State<MainNavigation> {
       _placeholder("Manajemen"),
       const FinanceScreen(),
       const CatalogInventoryScreen(),
-      const SettingsScreen(),
+      BlocProvider<SettingCubit>(
+        create: (context) => serviceLocator<SettingCubit>(),
+        child: const SettingsScreen(),
+      ),
     ];
     _startNavigationTimer();
   }

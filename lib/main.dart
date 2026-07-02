@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
+import 'package:maucoffee/features/setting/cubit/setting_cubit.dart';
 import 'package:maucoffee/home/cubit/employee_cubit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/config/env/env.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:maucoffee/features/cubit/absensi_cubit.dart';
+import 'package:maucoffee/features/absensi/cubit/absensi_cubit.dart';
 import 'package:maucoffee/auth/role_selector_screen.dart';
 import 'package:maucoffee/navigation/navigation.dart';
 
@@ -60,6 +61,7 @@ class MyApp extends StatelessWidget {
           create: (_) => serviceLocator<EmployeeCubit>()..fetchEmployees(),
         ),
         BlocProvider(create: (_) => serviceLocator<CatalogCubit>()),
+        BlocProvider(create: (_) => serviceLocator<SettingCubit>()),
       ],
       child: GestureDetector(
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),

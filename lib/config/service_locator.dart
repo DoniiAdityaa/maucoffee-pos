@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/data/api/api_service.dart';
+import 'package:maucoffee/features/absensi/cubit/absensi_cubit.dart';
 import 'package:maucoffee/home/cubit/employee_cubit.dart';
 import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
 import 'package:maucoffee/repository/category_repository.dart';
@@ -15,7 +16,8 @@ import 'package:maucoffee/repository/absensi_repository.dart';
 import 'package:maucoffee/repository/ingredient_repository.dart';
 import 'package:maucoffee/repository/cafe_profile_repository.dart';
 import 'package:maucoffee/services/offline_storage_service.dart';
-import 'package:maucoffee/features/cubit/absensi_cubit.dart';
+
+import 'package:maucoffee/features/setting/cubit/setting_cubit.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,21 +62,13 @@ Future<void> setUpLocator() async {
   serviceLocator.registerFactory<CategoryRepository>(
     () => CategoryRepository(),
   );
-  serviceLocator.registerFactory<ProductRepository>(
-    () => ProductRepository(),
-  );
+  serviceLocator.registerFactory<ProductRepository>(() => ProductRepository());
   serviceLocator.registerFactory<EmployeeRepository>(
     () => EmployeeRepository(),
   );
-  serviceLocator.registerFactory<ExpenseRepository>(
-    () => ExpenseRepository(),
-  );
-  serviceLocator.registerFactory<OrderRepository>(
-    () => OrderRepository(),
-  );
-  serviceLocator.registerFactory<AbsensiRepository>(
-    () => AbsensiRepository(),
-  );
+  serviceLocator.registerFactory<ExpenseRepository>(() => ExpenseRepository());
+  serviceLocator.registerFactory<OrderRepository>(() => OrderRepository());
+  serviceLocator.registerFactory<AbsensiRepository>(() => AbsensiRepository());
   serviceLocator.registerFactory<IngredientRepository>(
     () => IngredientRepository(),
   );
@@ -96,6 +90,12 @@ Future<void> setUpLocator() async {
       serviceLocator<CategoryRepository>(),
       serviceLocator<IngredientRepository>(),
       serviceLocator<OfflineStorageService>(),
+    ),
+  );
+  serviceLocator.registerFactory<SettingCubit>(
+    () => SettingCubit(
+      serviceLocator<CafeProfileRepository>(),
+      serviceLocator<UserPreference>(),
     ),
   );
 }

@@ -15,7 +15,7 @@ import 'package:maucoffee/repository/cafe_profile_repository.dart';
 import 'package:maucoffee/model/cafe_profile_model.dart';
 import 'package:maucoffee/services/sync_manager.dart';
 import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
-import 'package:maucoffee/features/cubit/absensi_cubit.dart';
+import 'package:maucoffee/features/absensi/cubit/absensi_cubit.dart';
 import 'package:maucoffee/auth/role_selector_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -294,13 +294,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await SyncManager().syncAllData();
 
       // 2. Download Profil Kafe Ter-Update
-      final cloudProfile = await serviceLocator<CafeProfileRepository>().getProfile();
+      final cloudProfile = await serviceLocator<CafeProfileRepository>()
+          .getProfile();
       if (cloudProfile != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_keyCafeName, cloudProfile.name);
         await prefs.setString(_keyCafeAddress, cloudProfile.address);
         await prefs.setString(_keyCafePhone, cloudProfile.phone);
-        
+
         setState(() {
           _cafeName = cloudProfile.name;
           _cafeAddress = cloudProfile.address;
@@ -341,10 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {
           _isSyncing = false;
         });
-        CustomFeedback.showError(
-          context,
-          "Sinkronisasi Gagal: $e",
-        );
+        CustomFeedback.showError(context, "Sinkronisasi Gagal: $e");
       }
     }
   }

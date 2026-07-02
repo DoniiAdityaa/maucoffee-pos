@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:maucoffee/auth/admin_scan_employee_screen.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
-import 'package:maucoffee/features/cubit/absensi_cubit.dart';
+import 'package:maucoffee/features/absensi/cubit/absensi_cubit.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';

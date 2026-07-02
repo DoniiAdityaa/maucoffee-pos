@@ -4,7 +4,7 @@ part 'cafe_profile_model.g.dart';
 
 @JsonSerializable(fieldRename: FieldRename.snake)
 class CafeProfileModel {
-  final String id; // admin_id pemilik toko
+  final String id;
   final String name;
   final String address;
   final String phone;
