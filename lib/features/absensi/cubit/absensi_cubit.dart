@@ -7,6 +7,7 @@ import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/services/offline_storage_service.dart';
 import 'package:maucoffee/services/sync_manager.dart';
+import 'package:maucoffee/services/history_manager.dart';
 
 part 'absensi_state.dart';
 
@@ -31,7 +32,11 @@ class AbsensiCubit extends Cubit<AbsensiState> {
   Future<void> fetchActiveShifts() async {
     emit(state.copyWith(status: AbsensiStatus.loading));
     try {
-      final activeShifts = await _absensiRepository.getActiveShifts();
+      // Ambil shift aktif dengan timeout 3 detik
+      final activeShifts = await _absensiRepository
+          .getActiveShifts()
+          .timeout(const Duration(seconds: 3));
+
       emit(
         state.copyWith(
           status: AbsensiStatus.success,
@@ -40,6 +45,40 @@ class AbsensiCubit extends Cubit<AbsensiState> {
         ),
       );
     } catch (e) {
+      // Offline fallback: Coba ambil shift aktif lokal dari HistoryManager di HP
+      try {
+        final activeShiftMap = await HistoryManager().getActiveShift();
+        if (activeShiftMap != null) {
+          final localModel = AbsensiModel(
+            id: activeShiftMap['shiftId'] ?? 'offline-shift',
+            employeeId: '',
+            clockIn: activeShiftMap['startTime'] as DateTime,
+            isSynced: false,
+            employees: {
+              'name': activeShiftMap['name'] as String,
+              'role': activeShiftMap['role'] as String,
+            },
+          );
+          emit(
+            state.copyWith(
+              status: AbsensiStatus.success,
+              activeShifts: [localModel],
+              errorMessage: () => null,
+            ),
+          );
+          return;
+        }
+      } catch (err) {
+        // Gagal memuat lokal - abaikan dan lanjut emit error
+        emit(
+          state.copyWith(
+            status: AbsensiStatus.error,
+            errorMessage: () => "Gagal memuat shift aktif offline: $err",
+          ),
+        );
+        return;
+      }
+
       emit(
         state.copyWith(
           status: AbsensiStatus.error,

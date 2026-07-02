@@ -296,8 +296,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             .toList();
 
         String itemsPreview = "";
+        final isManualIncome = order.invoiceNumber.startsWith("TRX-MAN-");
         if (orderItems.isEmpty) {
           itemsPreview = "Manual / Pemasukan Lain";
+        } else if (isManualIncome) {
+          itemsPreview = orderItems
+              .map((item) => "- x${item.quantity}${item.notes != null && item.notes!.isNotEmpty ? ' (${item.notes})' : ''}")
+              .join(", ");
         } else {
           itemsPreview = orderItems
               .map((item) {
@@ -332,6 +337,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       final Map<String, double> productRevenues = {};
 
       for (var item in todayItems) {
+        final parentOrder = todayOrders.firstWhere(
+          (o) => o.id == item.orderId,
+          orElse: () => OrderModel(
+            invoiceNumber: '',
+            totalAmount: 0,
+            paymentMethod: '',
+            amountPaid: 0,
+          ),
+        );
+        if (parentOrder.invoiceNumber.startsWith("TRX-MAN-")) {
+          continue; // Lewati pemasukan manual karena bukan penjualan produk
+        }
+
         final product = products.firstWhere(
           (p) => p.id == item.productId,
           orElse: () => ProductModel(
@@ -1198,15 +1216,37 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   }
 
                   if (state.status == AbsensiStatus.error) {
+                    final isNetworkError = state.errorMessage != null &&
+                        (state.errorMessage!.contains("SocketException") ||
+                         state.errorMessage!.contains("ClientException") ||
+                         state.errorMessage!.contains("Failed host lookup") ||
+                         state.errorMessage!.contains("TimeoutException") ||
+                         state.errorMessage!.contains("network"));
+                    
+                    final displayMsg = isNetworkError
+                        ? "Koneksi offline. Periksa koneksi internet Anda."
+                        : "Gagal memuat data: ${state.errorMessage}";
+
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: spacing5),
                       child: Center(
-                        child: Text(
-                          "Gagal memuat data: ${state.errorMessage}",
-                          style: sRegular.copyWith(
-                            color: const Color(0xFFFF6B6B),
-                          ),
-                          textAlign: TextAlign.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.wifi_off_rounded,
+                              color: Colors.white30,
+                              size: 24,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              displayMsg,
+                              style: sRegular.copyWith(
+                                color: Colors.white54,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       ),
                     );

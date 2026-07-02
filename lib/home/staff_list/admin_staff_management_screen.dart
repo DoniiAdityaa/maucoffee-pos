@@ -609,9 +609,13 @@ class _AdminStaffManagementScreenState extends State<AdminStaffManagementScreen>
                       children: [
                         const Icon(Icons.phone_rounded, size: 12, color: Colors.white38),
                         const SizedBox(width: 6),
-                        Text(
-                          employee.phone!,
-                          style: xxsRegular.copyWith(color: Colors.white60),
+                        Expanded(
+                          child: Text(
+                            employee.phone!,
+                            style: xxsRegular.copyWith(color: Colors.white60),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
@@ -622,9 +626,13 @@ class _AdminStaffManagementScreenState extends State<AdminStaffManagementScreen>
                       children: [
                         const Icon(Icons.email_rounded, size: 12, color: Colors.white38),
                         const SizedBox(width: 6),
-                        Text(
-                          employee.email!,
-                          style: xxsRegular.copyWith(color: Colors.white60),
+                        Expanded(
+                          child: Text(
+                            employee.email!,
+                            style: xxsRegular.copyWith(color: Colors.white60),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),

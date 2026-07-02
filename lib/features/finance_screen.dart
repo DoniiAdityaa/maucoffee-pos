@@ -2,7 +2,10 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_state.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:maucoffee/model/expense_model.dart';
@@ -16,6 +19,7 @@ import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/repository/order_repository.dart';
 import 'package:maucoffee/repository/expense_repository.dart';
 import 'package:maucoffee/model/order_model.dart';
+import 'package:maucoffee/utility/rupiah_formatter.dart';
 
 class FinanceScreen extends StatefulWidget {
   const FinanceScreen({super.key});
@@ -44,6 +48,7 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   List<OrderModel> _orders = [];
   List<ExpenseModel> _expenses = [];
+  Map<String, List<OrderItemModel>> _orderItemsMap = {};
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -64,10 +69,25 @@ class _FinanceScreenState extends State<FinanceScreen>
         expenseRepo.getExpenses(),
       ]);
 
+      final orders = results[0] as List<OrderModel>;
+      final expenses = results[1] as List<ExpenseModel>;
+
+      // Muat order items secara batch untuk order yang ada
+      final orderIds = orders
+          .map((o) => o.id ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      final itemsList = await orderRepo.getOrderItemsForOrders(orderIds);
+      final itemsMap = <String, List<OrderItemModel>>{};
+      for (final item in itemsList) {
+        itemsMap.putIfAbsent(item.orderId, () => []).add(item);
+      }
+
       if (!mounted) return;
       setState(() {
-        _orders = results[0] as List<OrderModel>;
-        _expenses = results[1] as List<ExpenseModel>;
+        _orders = orders;
+        _expenses = expenses;
+        _orderItemsMap = itemsMap;
         _isLoading = false;
       });
     } catch (e) {
@@ -109,29 +129,38 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   Future<void> _exportFinanceReport() async {
     HapticFeedback.mediumImpact();
-    
+
     // Filter data sesuai tanggal yang dipilih
-    final activeOrders = _orders.where((o) => o.createdAt != null && _isWithinDateRange(o.createdAt!)).toList();
-    final activeExpenses = _expenses.where((e) => e.createdAt != null && _isWithinDateRange(e.createdAt!)).toList();
-    
+    final activeOrders = _orders
+        .where((o) => o.createdAt != null && _isWithinDateRange(o.createdAt!))
+        .toList();
+    final activeExpenses = _expenses
+        .where((e) => e.createdAt != null && _isWithinDateRange(e.createdAt!))
+        .toList();
+
     if (activeOrders.isEmpty && activeExpenses.isEmpty) {
-      CustomFeedback.showInfo(context, "Tidak ada data keuangan pada tanggal terpilih untuk diunduh.");
+      CustomFeedback.showInfo(
+        context,
+        "Tidak ada data keuangan pada tanggal terpilih untuk diunduh.",
+      );
       return;
     }
 
     final dateStr = DateFormat('dd_MMM_yyyy').format(_selectedDate);
     final friendlyDate = DateFormat('dd MMMM yyyy').format(_selectedDate);
-    
+
     // Header CSV
     final StringBuffer csvBuffer = StringBuffer();
     csvBuffer.writeln("LAPORAN KEUANGAN MAUCOFFEE");
     csvBuffer.writeln("Tanggal Laporan: $friendlyDate");
     csvBuffer.writeln("");
-    csvBuffer.writeln("Tipe;Waktu;Invoice / Keterangan;Kategori;Metode Pembayaran;Nominal (IDR)");
-    
+    csvBuffer.writeln(
+      "Tipe;Waktu;Invoice / Keterangan;Kategori;Metode Pembayaran;Nominal (IDR)",
+    );
+
     double totalIncome = 0;
     double totalExpenses = 0;
-    
+
     // Masukkan data Pemasukan (Orders)
     for (final order in activeOrders) {
       final timeStr = DateFormat('HH:mm').format(order.createdAt!.toLocal());
@@ -139,10 +168,12 @@ class _FinanceScreenState extends State<FinanceScreen>
       final payment = order.paymentMethod;
       final amount = order.totalAmount;
       totalIncome += amount;
-      
-      csvBuffer.writeln("Pemasukan;$timeStr;$invoice;Penjualan;$payment;${amount.toInt()}");
+
+      csvBuffer.writeln(
+        "Pemasukan;$timeStr;$invoice;Penjualan;$payment;${amount.toInt()}",
+      );
     }
-    
+
     // Masukkan data Pengeluaran
     for (final exp in activeExpenses) {
       final timeStr = DateFormat('HH:mm').format(exp.createdAt!.toLocal());
@@ -150,23 +181,27 @@ class _FinanceScreenState extends State<FinanceScreen>
       final category = exp.category;
       final amount = exp.amount;
       totalExpenses += amount;
-      
-      csvBuffer.writeln("Pengeluaran;$timeStr;$title;$category;-;${amount.toInt()}");
+
+      csvBuffer.writeln(
+        "Pengeluaran;$timeStr;$title;$category;-;${amount.toInt()}",
+      );
     }
-    
+
     csvBuffer.writeln("");
     csvBuffer.writeln("RINGKASAN KEUANGAN");
     csvBuffer.writeln("Total Pemasukan;;;;;${totalIncome.toInt()}");
     csvBuffer.writeln("Total Pengeluaran;;;;;${totalExpenses.toInt()}");
-    csvBuffer.writeln("Keuntungan Bersih;;;;;${(totalIncome - totalExpenses).toInt()}");
-    
+    csvBuffer.writeln(
+      "Keuntungan Bersih;;;;;${(totalIncome - totalExpenses).toInt()}",
+    );
+
     try {
       final directory = await getTemporaryDirectory();
       final path = "${directory.path}/Laporan_Keuangan_Maucoffee_$dateStr.csv";
       final file = File(path);
-      
+
       await file.writeAsString(csvBuffer.toString());
-      
+
       if (mounted) {
         CustomFeedback.showSuccess(
           context,
@@ -644,12 +679,12 @@ class _FinanceScreenState extends State<FinanceScreen>
                             controller: amountController,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
+                              RupiahInputFormatter(),
                             ],
                             style: sMedium.copyWith(color: Colors.white),
                             decoration: InputDecoration(
                               border: InputBorder.none,
-                              hintText: "Contoh: 15000",
+                              hintText: "Contoh: 15.000",
                               hintStyle: sMedium.copyWith(
                                 color: Colors.white24,
                               ),
@@ -658,7 +693,8 @@ class _FinanceScreenState extends State<FinanceScreen>
                               if (value == null || value.trim().isEmpty) {
                                 return 'Nominal pengeluaran tidak boleh kosong';
                               }
-                              final parsed = double.tryParse(value);
+                              final cleanVal = value.replaceAll(RegExp(r'[^0-9]'), '');
+                              final parsed = double.tryParse(cleanVal);
                               if (parsed == null || parsed <= 0) {
                                 return 'Masukkan nominal yang valid (> 0)';
                               }
@@ -852,7 +888,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                                         ? 'Gaji / Salary'
                                         : titleController.text.trim();
                                     final amount = double.parse(
-                                      amountController.text.trim(),
+                                      amountController.text.replaceAll(RegExp(r'[^0-9]'), ''),
                                     );
                                     final notes = notesController.text.trim();
 
@@ -1069,12 +1105,12 @@ class _FinanceScreenState extends State<FinanceScreen>
                             controller: amountController,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
+                              RupiahInputFormatter(),
                             ],
                             style: sMedium.copyWith(color: Colors.white),
                             decoration: InputDecoration(
                               border: InputBorder.none,
-                              hintText: "Contoh: 50000",
+                              hintText: "Contoh: 50.000",
                               hintStyle: sMedium.copyWith(
                                 color: Colors.white24,
                               ),
@@ -1083,7 +1119,8 @@ class _FinanceScreenState extends State<FinanceScreen>
                               if (value == null || value.trim().isEmpty) {
                                 return 'Nominal pemasukan tidak boleh kosong';
                               }
-                              final parsed = double.tryParse(value);
+                              final cleanVal = value.replaceAll(RegExp(r'[^0-9]'), '');
+                              final parsed = double.tryParse(cleanVal);
                               if (parsed == null || parsed <= 0) {
                                 return 'Masukkan nominal yang valid (> 0)';
                               }
@@ -1278,7 +1315,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                                   if (formKey.currentState!.validate()) {
                                     final title = titleController.text.trim();
                                     final amount = double.parse(
-                                      amountController.text.trim(),
+                                       amountController.text.replaceAll(RegExp(r'[^0-9]'), ''),
                                     );
                                     final notes = notesController.text.trim();
 
@@ -1293,10 +1330,30 @@ class _FinanceScreenState extends State<FinanceScreen>
                                       createdAt: selectedDate,
                                     );
 
+                                    // Ambil salah satu ID produk ril dari katalog agar lolos foreign key UUID di database Supabase
+                                    String targetProductId = 'manual_income';
+                                    try {
+                                      final catalogCubit = context
+                                          .read<CatalogCubit>();
+                                      if (catalogCubit.state is CatalogLoaded) {
+                                        final loadedState =
+                                            catalogCubit.state as CatalogLoaded;
+                                        if (loadedState.products.isNotEmpty) {
+                                          targetProductId =
+                                              loadedState.products.first.id ??
+                                                  'manual_income';
+                                        }
+                                      }
+                                    } catch (err) {
+                                      debugPrint(
+                                        "Gagal mengambil dummy product id: $err",
+                                      );
+                                    }
+
                                     final items = [
                                       OrderItemModel(
                                         orderId: '',
-                                        productId: 'manual_income',
+                                        productId: targetProductId,
                                         quantity: 1,
                                         price: amount,
                                         notes:
@@ -1619,7 +1676,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                         color: const Color(0xFFE27D00).withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: const Color(0xFFE27D00).withValues(alpha: 0.25),
+                          color: const Color(
+                            0xFFE27D00,
+                          ).withValues(alpha: 0.25),
                           width: 1,
                         ),
                       ),
@@ -1629,9 +1688,13 @@ class _FinanceScreenState extends State<FinanceScreen>
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xFFE27D00).withValues(alpha: 0.15),
+                              color: const Color(
+                                0xFFE27D00,
+                              ).withValues(alpha: 0.15),
                               border: Border.all(
-                                color: const Color(0xFFE27D00).withValues(alpha: 0.4),
+                                color: const Color(
+                                  0xFFE27D00,
+                                ).withValues(alpha: 0.4),
                                 width: 1,
                               ),
                             ),
@@ -2010,6 +2073,115 @@ class _FinanceScreenState extends State<FinanceScreen>
       itemCount: transactions.length,
       itemBuilder: (context, index) {
         final tx = transactions[index];
+
+        final isManualIncome = tx.invoiceNumber.startsWith("TRX-MAN-");
+
+        if (isManualIncome) {
+          final orderItems = _orderItemsMap[tx.id] ?? [];
+          String title = "Pemasukan Manual";
+          String noteText = "";
+          if (orderItems.isNotEmpty) {
+            final itemNotes = orderItems.first.notes ?? "";
+            if (itemNotes.contains(" - ")) {
+              final parts = itemNotes.split(" - ");
+              title = parts[0];
+              noteText = parts.sublist(1).join(" - ");
+            } else {
+              title = itemNotes.isNotEmpty ? itemNotes : "Pemasukan Manual";
+            }
+          }
+
+          final categoryColor = Colors.green;
+          final categoryLabel = "Pemasukan";
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: spacing3),
+            padding: const EdgeInsets.all(spacing4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.02),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: sBold.copyWith(color: Colors.white),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: categoryColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: categoryColor.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Text(
+                                  categoryLabel,
+                                  style: xxxsBold.copyWith(color: categoryColor),
+                                ),
+                              ),
+                              if (tx.createdAt != null) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  dateFormatter.format(tx.createdAt!.toLocal()),
+                                  style: xxsRegular.copyWith(
+                                    color: Colors.white30,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      "+ ${currencyFormatter.format(tx.totalAmount)}",
+                      style: sBold.copyWith(color: Colors.green),
+                    ),
+                  ],
+                ),
+                if (noteText.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Divider(color: Colors.white10, height: 1),
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.description_rounded,
+                        color: Colors.white38,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          noteText,
+                          style: xxsRegular.copyWith(color: Colors.white60),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
 
         return Container(
           margin: const EdgeInsets.only(bottom: spacing3),

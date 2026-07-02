@@ -1039,28 +1039,28 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                               "Katalog & Inventory",
                               style: lgBold.copyWith(color: Colors.white),
                             ),
-                            if (isOffline) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.redAccent.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: Colors.redAccent.withOpacity(0.5),
-                                  ),
-                                ),
-                                child: Text(
-                                  "Offline",
-                                  style: xxxsBold.copyWith(
-                                    color: Colors.redAccent,
-                                  ),
-                                ),
-                              ),
-                            ],
+                            // if (isOffline) ...[
+                            //   const SizedBox(width: 8),
+                            //   Container(
+                            //     padding: const EdgeInsets.symmetric(
+                            //       horizontal: 6,
+                            //       vertical: 2,
+                            //     ),
+                            //     decoration: BoxDecoration(
+                            //       color: Colors.redAccent.withOpacity(0.2),
+                            //       borderRadius: BorderRadius.circular(4),
+                            //       border: Border.all(
+                            //         color: Colors.redAccent.withOpacity(0.5),
+                            //       ),
+                            //     ),
+                            //     child: Text(
+                            //       "Offline",
+                            //       style: xxxsBold.copyWith(
+                            //         color: Colors.redAccent,
+                            //       ),
+                            //     ),
+                            //   ),
+                            // ],
                           ],
                         ),
 

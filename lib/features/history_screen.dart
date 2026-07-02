@@ -984,26 +984,54 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: items.map((item) {
+        final tx = _orders.firstWhere(
+          (t) => t.id == orderId,
+          orElse: () => OrderModel(
+            invoiceNumber: '',
+            totalAmount: 0,
+            paymentMethod: '',
+            amountPaid: 0,
+          ),
+        );
+        final isManualIncome = tx.invoiceNumber.startsWith("TRX-MAN-");
+
         final product = products.firstWhere(
           (p) => p.id == item.productId,
           orElse: () => ProductModel(name: "Produk Tidak Dikenal", price: item.price, categoryId: ""),
         );
 
+        final displayName = isManualIncome ? "-" : product.name;
+
         return Padding(
           padding: const EdgeInsets.only(bottom: spacing2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  "${product.name} (x${item.quantity})",
-                  style: xsMedium.copyWith(color: Colors.white70),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      "$displayName (x${item.quantity})",
+                      style: xsMedium.copyWith(color: Colors.white70),
+                    ),
+                  ),
+                  Text(
+                    currencyFormatter.format(item.price * item.quantity),
+                    style: xsBold.copyWith(color: Colors.white),
+                  ),
+                ],
+              ),
+              if (item.notes != null && item.notes!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  "Catatan: ${item.notes}",
+                  style: xxsRegular.copyWith(
+                    color: Colors.white30,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
-              ),
-              Text(
-                currencyFormatter.format(item.price * item.quantity),
-                style: xsBold.copyWith(color: Colors.white),
-              ),
+              ],
             ],
           ),
         );
