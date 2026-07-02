@@ -12,6 +12,19 @@
       "request": "launch",
       "type": "dart",
       "deviceId": "emulator-5554"
+    },
+    {
+      "name": "Mau Coffee (iOS Donny Aditya)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "00008101-000230162212001E"
+    },
+    {
+      "name": "Mau Coffee (iOS Release)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "deviceId": "00008101-000230162212001E"
     }
   ],
   "compounds": [

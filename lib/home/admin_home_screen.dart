@@ -760,10 +760,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 ),
               ],
             ),
-            child: const Icon(
-              Icons.coffee_rounded,
-              color: Colors.white,
-              size: 22,
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/logo_maucoffee.png',
+                width: 22,
+                height: 22,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           const SizedBox(width: spacing4),

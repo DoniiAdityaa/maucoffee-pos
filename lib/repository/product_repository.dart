@@ -60,6 +60,10 @@ class ProductRepository {
   // Menghapus produk berdasarkan ID
   Future<void> deleteProduct(String productId) async {
     try {
+      // 1. Hapus semua data transaksi di order_items yang mencatat produk ini
+      await _client.from('order_items').delete().eq('product_id', productId);
+
+      // 2. Baru hapus produk utama dari katalog
       await _client.from('products').delete().eq('id', productId);
     } catch (e) {
       throw Exception('Gagal menghapus produk: $e');

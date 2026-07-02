@@ -49,8 +49,22 @@ class CatalogLoaded extends CatalogState {
 
 class CatalogError extends CatalogState {
   final String message;
-  const CatalogError(this.message);
+  final List<ProductModel>? previousProducts;
+  final List<CategoryModel>? previousCategories;
+  final List<IngredientModel>? previousIngredients;
+
+  const CatalogError(
+    this.message, {
+    this.previousProducts,
+    this.previousCategories,
+    this.previousIngredients,
+  });
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [
+        message,
+        previousProducts,
+        previousCategories,
+        previousIngredients,
+      ];
 }

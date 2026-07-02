@@ -13,6 +13,7 @@ import 'package:maucoffee/repository/order_repository.dart';
 import 'package:maucoffee/repository/product_repository.dart';
 import 'package:maucoffee/repository/absensi_repository.dart';
 import 'package:maucoffee/repository/ingredient_repository.dart';
+import 'package:maucoffee/repository/cafe_profile_repository.dart';
 import 'package:maucoffee/services/offline_storage_service.dart';
 import 'package:maucoffee/features/cubit/absensi_cubit.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -76,6 +77,9 @@ Future<void> setUpLocator() async {
   );
   serviceLocator.registerFactory<IngredientRepository>(
     () => IngredientRepository(),
+  );
+  serviceLocator.registerFactory<CafeProfileRepository>(
+    () => CafeProfileRepository(),
   );
   serviceLocator.registerFactory<OfflineStorageService>(
     () => OfflineStorageService(),

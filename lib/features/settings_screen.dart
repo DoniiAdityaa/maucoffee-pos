@@ -3,12 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
+import 'package:maucoffee/repository/cafe_profile_repository.dart';
+import 'package:maucoffee/model/cafe_profile_model.dart';
+import 'package:maucoffee/services/sync_manager.dart';
+import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
+import 'package:maucoffee/features/cubit/absensi_cubit.dart';
 import 'package:maucoffee/auth/role_selector_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -42,6 +49,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadSettings();
   }
 
+  String? _getAdminId() {
+    final client = Supabase.instance.client;
+    final userPrefs = serviceLocator<UserPreference>();
+    final role = userPrefs.getLoginRole();
+    if (role == 'admin') {
+      return client.auth.currentUser?.id;
+    } else {
+      return userPrefs.getEmployee()?.adminId;
+    }
+  }
+
   // Load settings from SharedPreferences
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -56,6 +74,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           prefs.getString(_keyLastSync) ??
           "Terakhir sinkronisasi: 20 Juni 2026, 22:15";
     });
+
+    // Jalankan asinkron untuk fetch profil dari Supabase Cloud secara global
+    try {
+      final cloudProfile = await serviceLocator<CafeProfileRepository>()
+          .getProfile();
+      if (cloudProfile != null) {
+        await prefs.setString(_keyCafeName, cloudProfile.name);
+        await prefs.setString(_keyCafeAddress, cloudProfile.address);
+        await prefs.setString(_keyCafePhone, cloudProfile.phone);
+
+        if (mounted) {
+          setState(() {
+            _cafeName = cloudProfile.name;
+            _cafeAddress = cloudProfile.address;
+            _cafePhone = cloudProfile.phone;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Gagal memuat profil kafe dari cloud: $e");
+    }
   }
 
   // Save specific setting to SharedPreferences
@@ -76,164 +115,172 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: EdgeInsets.only(
-            left: spacing6,
-            right: spacing6,
-            top: spacing6,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + spacing6,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E140A).withValues(alpha: 0.95),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildBottomSheetHandle(),
-                const SizedBox(height: spacing5),
-                Text(
-                  "Edit Profil Kafe",
-                  style: mdBold.copyWith(color: Colors.white),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: spacing6),
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(
+          left: spacing6,
+          right: spacing6,
+          top: spacing6,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + spacing6,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E140A).withValues(alpha: 0.95),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildBottomSheetHandle(),
+              const SizedBox(height: spacing5),
+              Text(
+                "Edit Profil Kafe",
+                style: mdBold.copyWith(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: spacing6),
 
-                // Inputs
-                _buildFormInputField(
-                  label: "Nama Kafe",
-                  controller: nameController,
-                  hintText: "Nama Kafe",
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Nama kafe tidak boleh kosong';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: spacing4),
+              // Inputs
+              _buildFormInputField(
+                label: "Nama Kafe",
+                controller: nameController,
+                hintText: "Nama Kafe",
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Nama kafe tidak boleh kosong';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: spacing4),
 
-                _buildFormInputField(
-                  label: "Alamat Lengkap",
-                  controller: addressController,
-                  hintText: "Alamat Lengkap",
-                  maxLines: 2,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Alamat tidak boleh kosong';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: spacing4),
+              _buildFormInputField(
+                label: "Alamat Lengkap",
+                controller: addressController,
+                hintText: "Alamat Lengkap",
+                maxLines: 2,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Alamat tidak boleh kosong';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: spacing4),
 
-                _buildFormInputField(
-                  label: "Nomor Telepon",
-                  controller: phoneController,
-                  hintText: "Contoh: 08123456789",
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Nomor telepon tidak boleh kosong';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: spacing7),
+              _buildFormInputField(
+                label: "Nomor Telepon (Opsional)",
+                controller: phoneController,
+                hintText: "Contoh: 08123456789",
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: spacing7),
 
-                // Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: TextButton.styleFrom(
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        "Batal",
+                        style: sBold.copyWith(color: Colors.white60),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: spacing3),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [primaryColor, Color(0xFFC56D00)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: primaryColor.withValues(alpha: 0.25),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (formKey.currentState!.validate()) {
+                            final newName = nameController.text.trim();
+                            final newAddress = addressController.text.trim();
+                            final newPhone = phoneController.text.trim();
+
+                            await _saveSetting(_keyCafeName, newName);
+                            await _saveSetting(_keyCafeAddress, newAddress);
+                            await _saveSetting(_keyCafePhone, newPhone);
+
+                            // Kirim ke Supabase Cloud
+                            try {
+                              final profile = CafeProfileModel(
+                                id: 'default',
+                                name: newName,
+                                address: newAddress,
+                                phone: newPhone,
+                                updatedAt: DateTime.now(),
+                              );
+                              await serviceLocator<CafeProfileRepository>()
+                                  .saveProfile(profile);
+                            } catch (e) {
+                              debugPrint(
+                                "Gagal sinkronisasi profil ke cloud: $e",
+                              );
+                            }
+
+                            setState(() {
+                              _cafeName = newName;
+                              _cafeAddress = newAddress;
+                              _cafePhone = newPhone;
+                            });
+
+                            if (mounted) {
+                              Navigator.pop(context);
+                              CustomFeedback.showSuccess(
+                                context,
+                                "Profil kafe berhasil diperbarui ke Cloud!",
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                         child: Text(
-                          "Batal",
-                          style: sBold.copyWith(color: Colors.white60),
+                          "Simpan",
+                          style: sBold.copyWith(color: Colors.white),
                         ),
                       ),
                     ),
-                    const SizedBox(width: spacing3),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [primaryColor, Color(0xFFC56D00)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: primaryColor.withValues(alpha: 0.25),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            if (formKey.currentState!.validate()) {
-                              final newName = nameController.text.trim();
-                              final newAddress = addressController.text.trim();
-                              final newPhone = phoneController.text.trim();
-
-                              await _saveSetting(_keyCafeName, newName);
-                              await _saveSetting(_keyCafeAddress, newAddress);
-                              await _saveSetting(_keyCafePhone, newPhone);
-
-                              setState(() {
-                                _cafeName = newName;
-                                _cafeAddress = newAddress;
-                                _cafePhone = newPhone;
-                              });
-
-                              if (mounted) {
-                                Navigator.pop(context);
-                                CustomFeedback.showSuccess(
-                                  context,
-                                  "Profil kafe berhasil diperbarui!",
-                                );
-                              }
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            "Simpan",
-                            style: sBold.copyWith(color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: spacing2),
-              ],
-            ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: spacing2),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // Trigger Mock Sync to Cloud
+  // Trigger Real Sync to Cloud
   Future<void> _triggerSync() async {
     if (_isSyncing) return;
 
@@ -242,24 +289,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _isSyncing = true;
     });
 
-    // Simulate Network/Sync delay
-    await Future.delayed(const Duration(milliseconds: 2000));
+    try {
+      // 1. Upload Data Offline
+      await SyncManager().syncAllData();
 
-    final now = DateTime.now();
-    final formattedTime = DateFormat('dd MMM yyyy, HH:mm').format(now);
-    final lastSyncString = "Terakhir sinkronisasi: $formattedTime";
+      // 2. Download Profil Kafe Ter-Update
+      final cloudProfile = await serviceLocator<CafeProfileRepository>().getProfile();
+      if (cloudProfile != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_keyCafeName, cloudProfile.name);
+        await prefs.setString(_keyCafeAddress, cloudProfile.address);
+        await prefs.setString(_keyCafePhone, cloudProfile.phone);
+        
+        setState(() {
+          _cafeName = cloudProfile.name;
+          _cafeAddress = cloudProfile.address;
+          _cafePhone = cloudProfile.phone;
+        });
+      }
 
-    await _saveSetting(_keyLastSync, lastSyncString);
+      // 3. Download & Refresh Katalog & Stok Bahan Baku (Cubit)
+      if (mounted) {
+        await context.read<CatalogCubit>().fetchCatalog();
+      }
 
-    if (mounted) {
-      setState(() {
-        _isSyncing = false;
-        _lastSyncTime = lastSyncString;
-      });
-      CustomFeedback.showSuccess(
-        context,
-        "Sinkronisasi Cloud Berhasil! Seluruh transaksi, pengeluaran, stok, dan absensi telah diunggah ke Supabase.",
-      );
+      // 4. Download & Refresh Shift Aktif & Riwayat Absensi (Cubit)
+      if (mounted) {
+        final absensiCubit = context.read<AbsensiCubit>();
+        await absensiCubit.fetchActiveShifts();
+        await absensiCubit.fetchShiftHistory();
+      }
+
+      final now = DateTime.now();
+      final formattedTime = DateFormat('dd MMM yyyy, HH:mm').format(now);
+      final lastSyncString = "Terakhir sinkronisasi: $formattedTime";
+
+      await _saveSetting(_keyLastSync, lastSyncString);
+
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _lastSyncTime = lastSyncString;
+        });
+        CustomFeedback.showSuccess(
+          context,
+          "Sinkronisasi Berhasil! Seluruh transaksi offline diunggah dan database lokal diperbarui.",
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+        CustomFeedback.showError(
+          context,
+          "Sinkronisasi Gagal: $e",
+        );
+      }
     }
   }
 
@@ -329,27 +415,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onPressed: () {
                       Navigator.pop(ctx);
                       HapticFeedback.heavyImpact();
-                      
+
                       final prefs = serviceLocator<UserPreference>();
                       prefs.clearData();
 
                       Navigator.pushAndRemoveUntil(
                         context,
                         PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) =>
-                              const RoleSelectorScreen(),
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const RoleSelectorScreen(),
                           transitionDuration: const Duration(milliseconds: 400),
-                          transitionsBuilder: (
-                            context,
-                            animation,
-                            secondaryAnimation,
-                            child,
-                          ) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                );
+                              },
                         ),
                         (route) => false,
                       );
@@ -486,7 +569,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: spacing4),
           _buildInfoRow("Alamat Lengkap", _cafeAddress, isDimmed: true),
           const SizedBox(height: spacing4),
-          _buildInfoRow("No. Telepon", _cafePhone),
+          _buildInfoRow("No. Telepon", _cafePhone.isEmpty ? "-" : _cafePhone),
         ],
       ),
     );
@@ -616,10 +699,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(width: spacing3),
-              Text(
-                "Backup & Sinkronisasi",
-                style: sBold.copyWith(color: Colors.white),
-              ),
+              Text("Sinkronisasi", style: sBold.copyWith(color: Colors.white)),
             ],
           ),
           const SizedBox(height: spacing4),

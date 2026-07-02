@@ -974,6 +974,10 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
                 categories = state.previousCategories;
                 ingredients = state.previousIngredients;
                 isLoading = true;
+              } else if (state is CatalogError) {
+                products = state.previousProducts;
+                categories = state.previousCategories;
+                ingredients = state.previousIngredients;
               }
 
               final productsList = products ?? <ProductModel>[];

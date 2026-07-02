@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 import 'package:maucoffee/model/expense_model.dart';
 import 'package:maucoffee/model/order_item_model.dart';
 import 'package:maucoffee/ui/color.dart';
@@ -102,6 +105,81 @@ class _FinanceScreenState extends State<FinanceScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _exportFinanceReport() async {
+    HapticFeedback.mediumImpact();
+    
+    // Filter data sesuai tanggal yang dipilih
+    final activeOrders = _orders.where((o) => o.createdAt != null && _isWithinDateRange(o.createdAt!)).toList();
+    final activeExpenses = _expenses.where((e) => e.createdAt != null && _isWithinDateRange(e.createdAt!)).toList();
+    
+    if (activeOrders.isEmpty && activeExpenses.isEmpty) {
+      CustomFeedback.showInfo(context, "Tidak ada data keuangan pada tanggal terpilih untuk diunduh.");
+      return;
+    }
+
+    final dateStr = DateFormat('dd_MMM_yyyy').format(_selectedDate);
+    final friendlyDate = DateFormat('dd MMMM yyyy').format(_selectedDate);
+    
+    // Header CSV
+    final StringBuffer csvBuffer = StringBuffer();
+    csvBuffer.writeln("LAPORAN KEUANGAN MAUCOFFEE");
+    csvBuffer.writeln("Tanggal Laporan: $friendlyDate");
+    csvBuffer.writeln("");
+    csvBuffer.writeln("Tipe;Waktu;Invoice / Keterangan;Kategori;Metode Pembayaran;Nominal (IDR)");
+    
+    double totalIncome = 0;
+    double totalExpenses = 0;
+    
+    // Masukkan data Pemasukan (Orders)
+    for (final order in activeOrders) {
+      final timeStr = DateFormat('HH:mm').format(order.createdAt!.toLocal());
+      final invoice = order.invoiceNumber;
+      final payment = order.paymentMethod;
+      final amount = order.totalAmount;
+      totalIncome += amount;
+      
+      csvBuffer.writeln("Pemasukan;$timeStr;$invoice;Penjualan;$payment;${amount.toInt()}");
+    }
+    
+    // Masukkan data Pengeluaran
+    for (final exp in activeExpenses) {
+      final timeStr = DateFormat('HH:mm').format(exp.createdAt!.toLocal());
+      final title = exp.title.replaceAll(';', ',');
+      final category = exp.category;
+      final amount = exp.amount;
+      totalExpenses += amount;
+      
+      csvBuffer.writeln("Pengeluaran;$timeStr;$title;$category;-;${amount.toInt()}");
+    }
+    
+    csvBuffer.writeln("");
+    csvBuffer.writeln("RINGKASAN KEUANGAN");
+    csvBuffer.writeln("Total Pemasukan;;;;;${totalIncome.toInt()}");
+    csvBuffer.writeln("Total Pengeluaran;;;;;${totalExpenses.toInt()}");
+    csvBuffer.writeln("Keuntungan Bersih;;;;;${(totalIncome - totalExpenses).toInt()}");
+    
+    try {
+      final directory = await getTemporaryDirectory();
+      final path = "${directory.path}/Laporan_Keuangan_Maucoffee_$dateStr.csv";
+      final file = File(path);
+      
+      await file.writeAsString(csvBuffer.toString());
+      
+      if (mounted) {
+        CustomFeedback.showSuccess(
+          context,
+          "Laporan Keuangan berhasil dibuat. Membuka file spreadsheet...",
+        );
+        // Buka file yang dihasilkan menggunakan aplikasi spreadsheet/viewer eksternal
+        await OpenFile.open(path);
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomFeedback.showError(context, "Gagal mengunduh laporan: $e");
+      }
+    }
   }
 
   Widget _buildDismissibleBackground() {
@@ -1516,6 +1594,79 @@ class _FinanceScreenState extends State<FinanceScreen>
                           ],
                         ),
                       ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: spacing4),
+
+            // Card Unduh Laporan Keuangan (Glassmorphic)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: spacing6),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: GestureDetector(
+                    onTap: _exportFinanceReport,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: spacing4,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE27D00).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFE27D00).withValues(alpha: 0.25),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFFE27D00).withValues(alpha: 0.15),
+                              border: Border.all(
+                                color: const Color(0xFFE27D00).withValues(alpha: 0.4),
+                                width: 1,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.description_outlined,
+                              color: Color(0xFFE27D00),
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: spacing4),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Unduh Laporan Keuangan",
+                                  style: sBold.copyWith(color: Colors.white),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "Ekspor transaksi & pengeluaran hari ini ke CSV",
+                                  style: xxsRegular.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Color(0xFFE27D00),
+                            size: 20,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

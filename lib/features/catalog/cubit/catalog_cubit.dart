@@ -43,6 +43,34 @@ class CatalogCubit extends Cubit<CatalogState> {
     }
   }
 
+  void _emitError(String message) {
+    final current = state;
+    if (current is CatalogLoaded) {
+      emit(CatalogError(
+        message,
+        previousProducts: current.products,
+        previousCategories: current.categories,
+        previousIngredients: current.ingredients,
+      ));
+    } else if (current is CatalogLoading) {
+      emit(CatalogError(
+        message,
+        previousProducts: current.previousProducts,
+        previousCategories: current.previousCategories,
+        previousIngredients: current.previousIngredients,
+      ));
+    } else if (current is CatalogError) {
+      emit(CatalogError(
+        message,
+        previousProducts: current.previousProducts,
+        previousCategories: current.previousCategories,
+        previousIngredients: current.previousIngredients,
+      ));
+    } else {
+      emit(CatalogError(message));
+    }
+  }
+
   // Memuat data katalog (Produk, Kategori, & Bahan Baku) secara online/offline
   Future<void> fetchCatalog() async {
     debugPrint("CatalogCubit: fetchCatalog called");
@@ -115,7 +143,7 @@ class CatalogCubit extends Cubit<CatalogState> {
         debugPrint("CatalogCubit: Cache fallback failed: $innerErr");
       }
 
-      emit(CatalogError("Gagal memuat katalog: $e"));
+      _emitError("Gagal memuat katalog: $e");
     }
   }
 
@@ -148,7 +176,7 @@ class CatalogCubit extends Cubit<CatalogState> {
       await _productRepository.addProduct(newProduct);
       await fetchCatalog();
     } catch (e) {
-      emit(CatalogError("Gagal menambahkan produk: $e"));
+      _emitError("Gagal menambahkan produk: $e");
     }
   }
 
@@ -184,7 +212,7 @@ class CatalogCubit extends Cubit<CatalogState> {
       await _productRepository.updateProduct(updatedProduct);
       await fetchCatalog();
     } catch (e) {
-      emit(CatalogError("Gagal memperbarui produk: $e"));
+      _emitError("Gagal memperbarui produk: $e");
     }
   }
 
@@ -195,7 +223,7 @@ class CatalogCubit extends Cubit<CatalogState> {
       await _productRepository.deleteProduct(productId);
       await fetchCatalog();
     } catch (e) {
-      emit(CatalogError("Gagal menghapus produk: $e"));
+      _emitError("Gagal menghapus produk: $e");
     }
   }
 
@@ -206,7 +234,7 @@ class CatalogCubit extends Cubit<CatalogState> {
       await _categoryRepository.addCategory(name);
       await fetchCatalog();
     } catch (e) {
-      emit(CatalogError("Gagal menambahkan kategori: $e"));
+      _emitError("Gagal menambahkan kategori: $e");
     }
   }
 
@@ -242,7 +270,7 @@ class CatalogCubit extends Cubit<CatalogState> {
 
       await fetchCatalog();
     } catch (e) {
-      emit(CatalogError("Gagal menambahkan bahan baku: $e"));
+      _emitError("Gagal menambahkan bahan baku: $e");
     }
   }
 
@@ -292,7 +320,7 @@ class CatalogCubit extends Cubit<CatalogState> {
 
       await fetchCatalog();
     } catch (e) {
-      emit(CatalogError("Gagal memperbarui bahan baku: $e"));
+      _emitError("Gagal memperbarui bahan baku: $e");
     }
   }
 
@@ -303,7 +331,7 @@ class CatalogCubit extends Cubit<CatalogState> {
       await _ingredientRepository.deleteIngredient(id);
       await fetchCatalog();
     } catch (e) {
-      emit(CatalogError("Gagal menghapus bahan baku: $e"));
+      _emitError("Gagal menghapus bahan baku: $e");
     }
   }
 }
