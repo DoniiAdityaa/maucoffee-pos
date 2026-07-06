@@ -2,13 +2,15 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/model/order_model.dart';
 import 'package:maucoffee/model/order_item_model.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 
 class OrderRepository {
   final _client = Supabase.instance.client;
 
   // 1. Mengambil riwayat transaksi (History) berdasarkan ID Admin
   Future<List<OrderModel>> getOrderHistory({String? adminId}) async {
-    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    final targetAdminId = adminId ?? serviceLocator<UserPreference>().getActiveAdminId();
     if (targetAdminId == null || targetAdminId.isEmpty) {
       return [];
     }
@@ -82,12 +84,15 @@ class OrderRepository {
     required List<OrderItemModel> items,
   }) async {
     try {
-      // a. Insert data order utama
       final orderJson = order.toJson();
       orderJson.remove('id');
-      orderJson.remove('created_at');
+      if (order.createdAt != null) {
+        orderJson['created_at'] = order.createdAt!.toIso8601String();
+      } else {
+        orderJson.remove('created_at');
+      }
       // Set admin_id jika belum diset
-      orderJson['admin_id'] ??= _client.auth.currentUser?.id;
+      orderJson['admin_id'] ??= serviceLocator<UserPreference>().getActiveAdminId();
 
       final orderResponse = await _client
           .from('orders')

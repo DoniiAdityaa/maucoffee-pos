@@ -1,13 +1,15 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/model/product_model.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 
 class ProductRepository {
   final _client = Supabase.instance.client;
 
   // Mengambil seluruh produk yang tersedia berdasarkan ID Admin
   Future<List<ProductModel>> getProducts({String? adminId}) async {
-    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    final targetAdminId = adminId ?? serviceLocator<UserPreference>().getActiveAdminId();
     if (targetAdminId == null || targetAdminId.isEmpty) {
       return [];
     }
@@ -34,7 +36,7 @@ class ProductRepository {
       json.remove('id');
       json.remove('created_at');
       // Set admin_id jika belum diset
-      json['admin_id'] ??= _client.auth.currentUser?.id;
+      json['admin_id'] ??= serviceLocator<UserPreference>().getActiveAdminId();
 
       await _client.from('products').insert(json);
     } catch (e) {
@@ -49,7 +51,7 @@ class ProductRepository {
       final json = product.toJson();
       json.remove('created_at');
       // Set admin_id jika belum diset agar tidak terupdate menjadi null
-      json['admin_id'] ??= _client.auth.currentUser?.id;
+      json['admin_id'] ??= serviceLocator<UserPreference>().getActiveAdminId();
 
       await _client.from('products').update(json).eq('id', product.id!);
     } catch (e) {
@@ -73,7 +75,7 @@ class ProductRepository {
   // Mengunggah gambar produk ke Supabase Storage
   Future<String?> uploadProductImage(File imageFile, String fileName) async {
     try {
-      final String uid = _client.auth.currentUser?.id ?? 'default';
+      final String uid = serviceLocator<UserPreference>().getActiveAdminId() ?? 'default';
       final String path = "$uid/$fileName";
       await _client.storage
           .from('product-images')

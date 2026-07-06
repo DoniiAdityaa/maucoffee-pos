@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maucoffee/config/service_locator.dart';
-import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/features/absensi/attendance_screen.dart';
 import 'package:maucoffee/home/admin_home_screen.dart';
 import 'package:maucoffee/features/sales_transaction_screen.dart';
@@ -41,11 +40,6 @@ class MainNavigationState extends State<MainNavigation> {
   }
 
   late final List<Widget> _pages;
-
-  bool get _isAdmin {
-    final userPrefs = serviceLocator<UserPreference>();
-    return userPrefs.getLoginRole() == 'admin';
-  }
 
   // Active Shift State
   Timer? _navigationTimer;
@@ -329,8 +323,6 @@ class MainNavigationState extends State<MainNavigation> {
 
   Widget _menuItem(int index, IconData icon, String label) {
     final bool isLocked = index == 4; // Manajemen is locked
-    final bool isFinance = index == 5;
-    final bool isFinanceDisabled = isFinance && !_isAdmin;
     final bool isActive = _currentIndex == index;
 
     return Expanded(
@@ -344,14 +336,6 @@ class MainNavigationState extends State<MainNavigation> {
             );
             return;
           }
-          // if (isFinanceDisabled) {
-          //   HapticFeedback.heavyImpact();
-          //   CustomFeedback.showError(
-          //     context,
-          //     "Laporan Keuangan tidak bisa diakses oleh staff",
-          //   );
-          //   return;
-          // }
           if (_currentIndex != index) {
             HapticFeedback.lightImpact();
             setState(() {
@@ -391,13 +375,9 @@ class MainNavigationState extends State<MainNavigation> {
                     icon,
                     color: isLocked
                         ? Colors.white.withValues(alpha: 0.25)
-                        : (isFinanceDisabled
-                              ? Colors.white.withValues(
-                                  alpha: 0.15,
-                                ) // Redup/gelap
-                              : (isActive
-                                    ? const Color(0xFFE27D00)
-                                    : Colors.white.withValues(alpha: 0.45))),
+                        : (isActive
+                              ? const Color(0xFFE27D00)
+                              : Colors.white.withValues(alpha: 0.45)),
                     size: 24,
                   ),
                   const SizedBox(height: 4),
@@ -406,13 +386,9 @@ class MainNavigationState extends State<MainNavigation> {
                     style: xxsBold.copyWith(
                       color: isLocked
                           ? Colors.white.withValues(alpha: 0.35)
-                          : (isFinanceDisabled
-                                ? Colors.white.withValues(
-                                    alpha: 0.25,
-                                  ) // Redup/gelap
-                                : (isActive
-                                      ? const Color(0xFFE27D00)
-                                      : Colors.white.withValues(alpha: 0.65))),
+                          : (isActive
+                                ? const Color(0xFFE27D00)
+                                : Colors.white.withValues(alpha: 0.65)),
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 1,

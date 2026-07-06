@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/model/expense_model.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 
 class ExpenseRepository {
   final _client = Supabase.instance.client;
@@ -7,7 +9,7 @@ class ExpenseRepository {
   // Mengambil daftar pengeluaran toko
   Future<List<ExpenseModel>> getExpenses() async {
     try {
-      final targetAdminId = _client.auth.currentUser?.id;
+      final targetAdminId = serviceLocator<UserPreference>().getActiveAdminId();
       if (targetAdminId == null || targetAdminId.isEmpty) {
         return [];
       }
@@ -33,7 +35,7 @@ class ExpenseRepository {
       json.remove('id');
       
       // Set admin_id jika belum diset
-      json['admin_id'] ??= _client.auth.currentUser?.id;
+      json['admin_id'] ??= serviceLocator<UserPreference>().getActiveAdminId();
 
       // Gunakan created_at dari model agar custom date dari user tersimpan
       if (expense.createdAt != null) {

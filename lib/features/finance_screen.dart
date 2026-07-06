@@ -388,29 +388,7 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   Widget _buildDateSelector() {
     if (!_isAdmin) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: spacing5),
-        padding: const EdgeInsets.symmetric(
-          horizontal: spacing6,
-          vertical: spacing3,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(100),
-          color: Colors.white.withValues(alpha: 0.04),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.today_rounded, color: primaryColor, size: 16),
-            const SizedBox(width: spacing2 + 2),
-            Text(
-              "Hari Ini: ${DateFormat('dd MMM yyyy').format(DateTime.now())}",
-              style: sBold.copyWith(color: Colors.white, letterSpacing: -0.1),
-            ),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     final canGoNext = _canGoToNextDay();

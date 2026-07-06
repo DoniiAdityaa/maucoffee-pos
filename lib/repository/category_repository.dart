@@ -1,12 +1,14 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/model/category_model.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 
 class CategoryRepository {
   final _client = Supabase.instance.client;
 
   // Mengambil kategori berdasarkan ID Admin
   Future<List<CategoryModel>> getCategories({String? adminId}) async {
-    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    final targetAdminId = adminId ?? serviceLocator<UserPreference>().getActiveAdminId();
     if (targetAdminId == null || targetAdminId.isEmpty) {
       return [];
     }
@@ -28,7 +30,7 @@ class CategoryRepository {
   // Menambah kategori baru
   Future<CategoryModel> addCategory(String name, {String? adminId}) async {
     try {
-      final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+      final targetAdminId = adminId ?? serviceLocator<UserPreference>().getActiveAdminId();
       final response = await _client.from('categories').insert({
         'name': name,
         'admin_id': targetAdminId,

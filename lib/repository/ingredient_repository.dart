@@ -2,13 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/model/ingredient_model.dart';
 import 'package:maucoffee/model/stock_log_model.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 
 class IngredientRepository {
   final _client = Supabase.instance.client;
 
   // Mengambil daftar bahan baku berdasarkan ID Admin aktif
   Future<List<IngredientModel>> getIngredients({String? adminId}) async {
-    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    final targetAdminId = adminId ?? serviceLocator<UserPreference>().getActiveAdminId();
     if (targetAdminId == null || targetAdminId.isEmpty) {
       return [];
     }
@@ -30,7 +32,7 @@ class IngredientRepository {
   // Menambahkan bahan baku baru
   Future<IngredientModel> addIngredient(IngredientModel item, {String? adminId}) async {
     try {
-      final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+      final targetAdminId = adminId ?? serviceLocator<UserPreference>().getActiveAdminId();
       final response = await _client.from('ingredients').insert({
         'name': item.name,
         'category': item.category,
@@ -51,7 +53,7 @@ class IngredientRepository {
       if (item.id == null) {
         throw Exception('ID bahan baku tidak boleh kosong untuk pembaruan.');
       }
-      final targetAdminId = _client.auth.currentUser?.id;
+      final targetAdminId = serviceLocator<UserPreference>().getActiveAdminId();
       await _client.from('ingredients').update({
         'name': item.name,
         'category': item.category,
@@ -80,7 +82,7 @@ class IngredientRepository {
       final json = log.toJson();
       json.remove('id');
       json.remove('created_at');
-      json['admin_id'] ??= _client.auth.currentUser?.id;
+      json['admin_id'] ??= serviceLocator<UserPreference>().getActiveAdminId();
 
       await _client.from('stock_logs').insert(json);
     } catch (e) {
@@ -91,7 +93,7 @@ class IngredientRepository {
 
   // Mengambil daftar log penyesuaian stok dari Supabase
   Future<List<StockLogModel>> getStockLogs({String? adminId}) async {
-    final targetAdminId = adminId ?? _client.auth.currentUser?.id;
+    final targetAdminId = adminId ?? serviceLocator<UserPreference>().getActiveAdminId();
     if (targetAdminId == null || targetAdminId.isEmpty) {
       return [];
     }

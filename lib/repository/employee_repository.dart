@@ -1,12 +1,14 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:maucoffee/model/employee_model.dart';
+import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/config/user_preference.dart';
 
 class EmployeeRepository {
   final _client = Supabase.instance.client;
 
   // Mengambil daftar karyawan aktif milik admin saat ini
   Future<List<EmployeeModel>> getEmployees() async {
-    final adminId = _client.auth.currentUser?.id;
+    final adminId = serviceLocator<UserPreference>().getActiveAdminId();
     if (adminId == null || adminId.isEmpty) {
       return [];
     }
@@ -32,7 +34,7 @@ class EmployeeRepository {
       // JANGAN hapus 'id' karena kita menggunakan device_uuid sebagai primary key id
       json.remove('created_at');
       // Set admin_id jika belum diset
-      json['admin_id'] ??= _client.auth.currentUser?.id;
+      json['admin_id'] ??= serviceLocator<UserPreference>().getActiveAdminId();
 
       await _client.from('employees').insert(json);
     } catch (e) {

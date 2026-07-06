@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:maucoffee/model/user_model.dart';
 import 'package:maucoffee/model/employee_model.dart'; // Import EmployeeModel
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UserPreference {
   final SharedPreferences prefs;
@@ -107,5 +108,14 @@ class UserPreference {
 
   bool hasSeenOnboarding() {
     return prefs.getBool("has_seen_onboarding") ?? false;
+  }
+
+  // Mengambil ID Admin pemilik toko secara dinamis berdasarkan role login aktif
+  String? getActiveAdminId() {
+    final role = getLoginRole();
+    if (role == 'employee') {
+      return getEmployee()?.adminId;
+    }
+    return Supabase.instance.client.auth.currentUser?.id;
   }
 }
