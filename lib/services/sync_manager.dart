@@ -20,7 +20,8 @@ class SyncManager {
   bool _isSyncing = false;
 
   // Broadcast controller to notify listeners when sync finishes
-  final StreamController<void> _syncCompletedController = StreamController<void>.broadcast();
+  final StreamController<void> _syncCompletedController =
+      StreamController<void>.broadcast();
   Stream<void> get onSyncCompleted => _syncCompletedController.stream;
 
   // Inisialisasi pendengar perubahan internet
@@ -128,16 +129,16 @@ class SyncManager {
       }
     }
 
-    // Notify listeners (e.g. AbsensiCubit) that sync has finished
     _syncCompletedController.add(null);
   }
 
-  // 2. Sinkronisasi Pesanan / Orderan
   Future<void> _syncOrders() async {
     final orderQueue = await _offlineStorage.getOrderQueue();
     if (orderQueue.isEmpty) return;
-    
-    debugPrint("⏳ Mensinkronkan data orderan offline... (Ditemukan ${orderQueue.length} transaksi)");
+
+    debugPrint(
+      "⏳ Mensinkronkan data orderan offline... (Ditemukan ${orderQueue.length} transaksi)",
+    );
     final orderRepo = serviceLocator<OrderRepository>();
 
     for (var orderData in orderQueue) {
@@ -148,7 +149,10 @@ class SyncManager {
 
         final order = OrderModel.fromJson(orderMap);
         final items = itemsList
-            .map((itemJson) => OrderItemModel.fromJson(itemJson as Map<String, dynamic>))
+            .map(
+              (itemJson) =>
+                  OrderItemModel.fromJson(itemJson as Map<String, dynamic>),
+            )
             .toList();
 
         await orderRepo.createOrder(order: order, items: items);

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maucoffee/auth/admin_login_screen.dart';
 import 'package:maucoffee/auth/employee_register_qr_screen.dart';
+import 'package:maucoffee/ui/widget_sharing/page_route_helper.dart';
 
 // Import Design System kita
 import 'package:maucoffee/ui/typography.dart';
@@ -47,17 +48,11 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _logoFade = CurvedAnimation(
-      parent: _logoController,
-      curve: Curves.easeOut,
-    );
-    _logoSlide = Tween<Offset>(
-      begin: const Offset(0, -0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _logoController,
-      curve: Curves.easeOutCubic,
-    ));
+    _logoFade = CurvedAnimation(parent: _logoController, curve: Curves.easeOut);
+    _logoSlide = Tween<Offset>(begin: const Offset(0, -0.3), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _logoController, curve: Curves.easeOutCubic),
+        );
 
     // 2. Cards staggered animation
     _cardsController = AnimationController(
@@ -71,13 +66,13 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
         curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
       ),
     );
-    _ownerCardSlide = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _cardsController,
-      curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic),
-    ));
+    _ownerCardSlide =
+        Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _cardsController,
+            curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _staffCardFade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
@@ -85,13 +80,13 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
         curve: const Interval(0.3, 0.9, curve: Curves.easeOut),
       ),
     );
-    _staffCardSlide = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _cardsController,
-      curve: const Interval(0.3, 0.9, curve: Curves.easeOutCubic),
-    ));
+    _staffCardSlide =
+        Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _cardsController,
+            curve: const Interval(0.3, 0.9, curve: Curves.easeOutCubic),
+          ),
+        );
 
     // 3. Footer animation
     _footerController = AnimationController(
@@ -184,14 +179,13 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
                             gradient: const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFFE27D00),
-                                Color(0xFFD06A00),
-                              ],
+                              colors: [Color(0xFFE27D00), Color(0xFFD06A00)],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFE27D00).withOpacity(0.35),
+                                color: const Color(
+                                  0xFFE27D00,
+                                ).withOpacity(0.35),
                                 blurRadius: 24,
                                 offset: const Offset(0, 8),
                               ),
@@ -242,9 +236,9 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
                             onTapDown: (_) => _onOwnerTapDown(),
                             onTapUp: (_) {
                               _onOwnerTapUp();
-                              Navigator.push(
+                              AppNavigator.push(
                                 context,
-                                _buildPageRoute(const AdminLoginScreen()),
+                                const AdminLoginScreen(),
                               );
                             },
                             onTapCancel: _onOwnerTapUp,
@@ -269,10 +263,9 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
                             onTapDown: (_) => _onStaffTapDown(),
                             onTapUp: (_) {
                               _onStaffTapUp();
-                              Navigator.push(
+                              AppNavigator.push(
                                 context,
-                                _buildPageRoute(
-                                    const EmployeeRegisterQrScreen()),
+                                const EmployeeRegisterQrScreen(),
                               );
                             },
                             onTapCancel: _onStaffTapUp,
@@ -339,10 +332,7 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
                 Colors.white.withOpacity(0.05),
               ],
             ),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.12),
-              width: 1,
-            ),
+            border: Border.all(color: Colors.white.withOpacity(0.12), width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,10 +349,7 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFFE27D00),
-                          Color(0xFFCC6A00),
-                        ],
+                        colors: [Color(0xFFE27D00), Color(0xFFCC6A00)],
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -437,10 +424,7 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFE27D00),
-                      Color(0xFFD06A00),
-                    ],
+                    colors: [Color(0xFFE27D00), Color(0xFFD06A00)],
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -489,10 +473,7 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             color: Colors.white.withOpacity(0.06),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.08),
-              width: 1,
-            ),
+            border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
           ),
           child: Row(
             children: [
@@ -561,40 +542,6 @@ class _RoleSelectorScreenState extends State<RoleSelectorScreen>
           ),
         ),
       ),
-    );
-  }
-
-  // ═════════════════════════════════════════════════════
-  // iOS-style page transition — slide up with fade
-  // ═════════════════════════════════════════════════════
-  PageRouteBuilder _buildPageRoute(Widget page) {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionDuration: const Duration(milliseconds: 400),
-      reverseTransitionDuration: const Duration(milliseconds: 350),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final fadeTween = Tween<double>(begin: 0.0, end: 1.0).animate(
-          CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOut,
-          ),
-        );
-        final slideTween = Tween<Offset>(
-          begin: const Offset(0, 0.08),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        ));
-
-        return FadeTransition(
-          opacity: fadeTween,
-          child: SlideTransition(
-            position: slideTween,
-            child: child,
-          ),
-        );
-      },
     );
   }
 }

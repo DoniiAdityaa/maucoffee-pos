@@ -17,6 +17,7 @@ import 'package:maucoffee/services/sync_manager.dart';
 import 'package:maucoffee/features/catalog/cubit/catalog_cubit.dart';
 import 'package:maucoffee/features/absensi/cubit/absensi_cubit.dart';
 import 'package:maucoffee/auth/role_selector_screen.dart';
+import 'package:maucoffee/ui/widget_sharing/page_route_helper.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -417,22 +418,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       final prefs = serviceLocator<UserPreference>();
                       prefs.clearData();
 
-                      Navigator.pushAndRemoveUntil(
+                      AppNavigator.pushAndRemoveUntil(
                         context,
-                        PageRouteBuilder(
-                          pageBuilder:
-                              (context, animation, secondaryAnimation) =>
-                                  const RoleSelectorScreen(),
-                          transitionDuration: const Duration(milliseconds: 400),
-                          transitionsBuilder:
-                              (context, animation, secondaryAnimation, child) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                );
-                              },
-                        ),
-                        (route) => false,
+                        const RoleSelectorScreen(),
                       );
                     },
                     style: ElevatedButton.styleFrom(

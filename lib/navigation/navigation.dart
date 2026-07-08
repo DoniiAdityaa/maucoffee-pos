@@ -121,11 +121,12 @@ class MainNavigationState extends State<MainNavigation> {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final size = MediaQuery.of(context).size;
 
-    // Initialize pill position to bottom right on first active frame
+    // Initialize pill position to bottom right on first active frame, snapping above the new bottom bar
     if (_activeShiftStartTime != null && !_hasInitializedPillPosition) {
+      final bottomBarHeight =
+          64 + (bottomPadding > 0 ? bottomPadding : spacing4) + spacing2;
       _pillX = size.width - 135 - spacing4;
-      _pillY =
-          size.height - (bottomPadding > 0 ? bottomPadding : spacing5) - 56;
+      _pillY = size.height - bottomBarHeight - 56 - spacing2;
       _hasInitializedPillPosition = true;
     }
 
@@ -174,36 +175,6 @@ class MainNavigationState extends State<MainNavigation> {
             ),
           ),
 
-          // Dimmer overlay when menu is open
-          if (_isMenuOpen)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _isMenuOpen = false;
-                  });
-                },
-                behavior: HitTestBehavior.opaque,
-                child: Container(color: Colors.black.withOpacity(0.4)),
-              ),
-            ),
-
-          // Expanded Menu Panel (displays above the floating button when open)
-          if (_isMenuOpen)
-            Positioned(
-              left: spacing4,
-              right: spacing4,
-              bottom: (bottomPadding > 0 ? bottomPadding : spacing5) + 68,
-              child: _expandedMenuPanel(),
-            ),
-
-          // Floating Toggle Button (Coffee -> Cross)
-          Positioned(
-            left: spacing4,
-            bottom: bottomPadding > 0 ? bottomPadding : spacing5,
-            child: _toggleButton(),
-          ),
-
           // Persistent Floating Shift Pill (Draggable & Snapping)
           if (_activeShiftStartTime != null && !_isMenuOpen)
             AnimatedPositioned(
@@ -213,115 +184,225 @@ class MainNavigationState extends State<MainNavigation> {
               top: _pillY,
               child: _buildActiveShiftPill(),
             ),
+
+          // Full Screen Blur Menu Overlay
+          if (_isMenuOpen) _buildFullScreenMenu(),
         ],
       ),
+      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
   // ── Private Navigation Widgets ──
 
-  Widget _toggleButton() {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        setState(() {
-          _isMenuOpen = !_isMenuOpen;
-        });
-      },
+  // ── New Navigation & Menu Layout ──
+
+  Widget _buildBottomNavigationBar() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      margin: EdgeInsets.only(
+        left: spacing4,
+        right: spacing4,
+        bottom: bottomPadding > 0 ? bottomPadding : spacing4,
+      ),
+      height: 64,
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A1A0A).withOpacity(0.85),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _navTab(0, Icons.home_rounded, "Beranda"),
+              _navTab(1, Icons.coffee_rounded, "Item"),
+              _navTab(-1, Icons.grid_view_rounded, "Menu", isMenuButton: true),
+              _navTab(7, Icons.settings_rounded, "Pengaturan"),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navTab(
+    int index,
+    IconData icon,
+    String label, {
+    bool isMenuButton = false,
+  }) {
+    final bool isActive = isMenuButton
+        ? _isMenuOpen
+        : (!_isMenuOpen && _currentIndex == index);
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          if (isMenuButton) {
+            setState(() {
+              _isMenuOpen = !_isMenuOpen;
+            });
+          } else {
+            setState(() {
+              _currentIndex = index;
+              _isMenuOpen = false;
+            });
+          }
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? primaryColor : Colors.white.withOpacity(0.4),
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: xxsBold.copyWith(
+                color: isActive ? primaryColor : Colors.white.withOpacity(0.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFullScreenMenu() {
+    return Positioned.fill(
+      child: ClipRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: _isMenuOpen
-                  ? primaryColor
-                  : const Color(0xFF2A1A0A).withOpacity(0.85),
-              border: Border.all(
-                color: _isMenuOpen
-                    ? primaryColor.withOpacity(0.5)
-                    : Colors.white.withOpacity(0.08),
-                width: 1.2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Icon(
-              _isMenuOpen ? Icons.close_rounded : Icons.local_cafe_rounded,
-              color: _isMenuOpen ? Colors.white : primaryColor,
-              size: 26,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _expandedMenuPanel() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          height: 170,
-          padding: const EdgeInsets.symmetric(
-            vertical: spacing3,
-            horizontal: spacing2,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: const Color(0xFF2A1A0A).withOpacity(0.85),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.08),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.4),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              Row(
+            color: Colors.black.withOpacity(0.65),
+            child: SafeArea(
+              child: Column(
                 children: [
-                  _menuItem(0, Icons.home_rounded, "Beranda"),
-                  _menuItem(1, Icons.coffee_rounded, "Item"),
-                  _menuItem(6, Icons.inventory_2_outlined, "Katalog"),
-                  _menuItem(2, Icons.history_rounded, "Histori"),
-                ],
-              ),
-              Row(
-                children: [
-                  _menuItem(3, Icons.fingerprint_rounded, "Absensi"),
-                  _menuItem(4, Icons.people_outline_rounded, "Manajemen"),
-                  _menuItem(
-                    5,
-                    Icons.account_balance_wallet_rounded,
-                    "Keuangan",
+                  const Spacer(),
+                  // Header Akses Cepat tepat di atas grid
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: spacing5,
+                      right: spacing5,
+                      bottom: spacing3,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Text(
+                        //   "Akses Cepat",
+                        //   style: smBold.copyWith(color: Colors.white70),
+                        // ),
+                        // GestureDetector(
+                        //   onTap: () {
+                        //     HapticFeedback.mediumImpact();
+                        //     setState(() {
+                        //       _isMenuOpen = false;
+                        //     });
+                        //   },
+                        //   child: Text(
+                        //     "Tutup",
+                        //     style: xsRegular.copyWith(color: primaryColor),
+                        //   ),
+                        // ),
+                      ],
+                    ),
                   ),
-                  _menuItem(7, Icons.settings_rounded, "Pengaturan"),
+                  // Grid Menu Vertikal (4 Baris x 2 Kolom)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: spacing4),
+                    child: Column(
+                      children: [
+                        // Baris 1: Beranda & Item
+                        Row(
+                          children: [
+                            _gridMenuItem(0, Icons.home_rounded, "Beranda"),
+                            _gridMenuItem(1, Icons.coffee_rounded, "Item"),
+                          ],
+                        ),
+                        const SizedBox(height: spacing2),
+                        // Baris 2: Katalog & Histori
+                        Row(
+                          children: [
+                            _gridMenuItem(
+                              6,
+                              Icons.inventory_2_outlined,
+                              "Katalog",
+                            ),
+                            _gridMenuItem(2, Icons.history_rounded, "Histori"),
+                          ],
+                        ),
+                        const SizedBox(height: spacing2),
+                        // Baris 3: Absensi & Manajemen
+                        Row(
+                          children: [
+                            _gridMenuItem(
+                              3,
+                              Icons.fingerprint_rounded,
+                              "Absensi",
+                            ),
+                            _gridMenuItem(
+                              4,
+                              Icons.people_outline_rounded,
+                              "Manajemen",
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: spacing2),
+                        // Baris 4: Keuangan & Pengaturan
+                        Row(
+                          children: [
+                            _gridMenuItem(
+                              5,
+                              Icons.account_balance_wallet_rounded,
+                              "Keuangan",
+                            ),
+                            _gridMenuItem(
+                              7,
+                              Icons.settings_rounded,
+                              "Pengaturan",
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  // Menyesuaikan jarak bawah agar pas di atas Bottom Navigation Bar
+                  SizedBox(
+                    height:
+                        64 +
+                        (MediaQuery.of(context).padding.bottom > 0
+                            ? MediaQuery.of(context).padding.bottom
+                            : spacing4) +
+                        spacing3,
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _menuItem(int index, IconData icon, String label) {
+  Widget _gridMenuItem(int index, IconData icon, String label) {
     final bool isLocked = index == 4; // Manajemen is locked
     final bool isActive = _currentIndex == index;
 
@@ -336,59 +417,43 @@ class MainNavigationState extends State<MainNavigation> {
             );
             return;
           }
-          if (_currentIndex != index) {
-            HapticFeedback.lightImpact();
-            setState(() {
-              _currentIndex = index;
-              _isMenuOpen = false;
-            });
-          }
+          HapticFeedback.lightImpact();
+          setState(() {
+            _currentIndex = index;
+            _isMenuOpen = false;
+          });
         },
-        behavior: HitTestBehavior.opaque,
         child: Container(
-          margin: const EdgeInsets.symmetric(
-            horizontal: spacing1,
-            vertical: spacing1,
-          ),
-          padding: const EdgeInsets.symmetric(vertical: spacing2),
+          height: 80,
+          margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 3),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: isActive
-                ? const Color(0xFFE27D00).withValues(alpha: 0.15)
-                : Colors.transparent,
+            color: const Color(0xFF2A1A0A).withOpacity(0.6),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isActive
-                  ? const Color(0xFFE27D00).withValues(alpha: 0.3)
-                  : Colors.transparent,
+              color: isActive ? primaryColor : Colors.white.withOpacity(0.08),
               width: 1.2,
             ),
           ),
           child: Stack(
-            clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
               Column(
-                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
                     icon,
                     color: isLocked
-                        ? Colors.white.withValues(alpha: 0.25)
-                        : (isActive
-                              ? const Color(0xFFE27D00)
-                              : Colors.white.withValues(alpha: 0.45)),
-                    size: 24,
+                        ? Colors.white.withOpacity(0.25)
+                        : (isActive ? primaryColor : Colors.white70),
+                    size: 28,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
                   Text(
                     label,
                     style: xxsBold.copyWith(
                       color: isLocked
-                          ? Colors.white.withValues(alpha: 0.35)
-                          : (isActive
-                                ? const Color(0xFFE27D00)
-                                : Colors.white.withValues(alpha: 0.65)),
+                          ? Colors.white.withOpacity(0.3)
+                          : (isActive ? primaryColor : Colors.white),
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 1,
@@ -398,24 +463,9 @@ class MainNavigationState extends State<MainNavigation> {
               ),
               if (isLocked)
                 Positioned(
-                  top: -4,
-                  right: 4,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE27D00),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF2A1A0A),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.lock_rounded,
-                      color: Colors.white,
-                      size: 10,
-                    ),
-                  ),
+                  top: 8,
+                  right: 8,
+                  child: Icon(Icons.lock_rounded, color: iconWhite, size: 14),
                 ),
             ],
           ),
@@ -442,15 +492,17 @@ class MainNavigationState extends State<MainNavigation> {
           _pillX = (_pillX ?? 0) + details.delta.dx;
           _pillY = (_pillY ?? 0) + details.delta.dy;
 
-          // Clamping bounds to keep the pill within the screen view
+          // Clamping bounds to keep the pill within the screen view, snapping above bottom bar
           final size = MediaQuery.of(context).size;
           final topPadding = MediaQuery.of(context).padding.top;
           final bottomPadding = MediaQuery.of(context).padding.bottom;
+          final bottomBarHeight =
+              64 + (bottomPadding > 0 ? bottomPadding : spacing4) + spacing2;
 
           _pillX = _pillX!.clamp(spacing4, size.width - 135 - spacing4);
           _pillY = _pillY!.clamp(
             topPadding + spacing4,
-            size.height - bottomPadding - 56 - spacing4,
+            size.height - bottomBarHeight - 56,
           );
         });
       },
@@ -458,18 +510,20 @@ class MainNavigationState extends State<MainNavigation> {
         final size = MediaQuery.of(context).size;
         final topPadding = MediaQuery.of(context).padding.top;
         final bottomPadding = MediaQuery.of(context).padding.bottom;
+        final bottomBarHeight =
+            64 + (bottomPadding > 0 ? bottomPadding : spacing4) + spacing2;
 
         final leftBound = spacing4;
         final rightBound = size.width - 135 - spacing4;
         final topBound = topPadding + spacing4;
-        final bottomBound = size.height - bottomPadding - 56 - spacing4;
+        final bottomBound = size.height - bottomBarHeight - 56;
 
         // Snap X to nearest horizontal edge (left or right)
         final midX = size.width / 2;
         final targetX = (_pillX! + (135 / 2) < midX) ? leftBound : rightBound;
 
         // Snap Y to nearest vertical edge (top or bottom)
-        final midY = (topPadding + size.height - bottomPadding - 56) / 2;
+        final midY = (topPadding + size.height - bottomBarHeight - 56) / 2;
         final targetY = (_pillY! + (56 / 2) < midY) ? topBound : bottomBound;
 
         setState(() {

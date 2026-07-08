@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:maucoffee/config/service_locator.dart';
 import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/navigation/navigation.dart';
+import 'package:maucoffee/ui/widget_sharing/page_route_helper.dart';
 import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/model/employee_model.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -153,18 +154,9 @@ class _EmployeeRegisterQrScreenState extends State<EmployeeRegisterQrScreen>
               "Welcome, ${employee.name}! Registered as ${employee.role}.",
             );
 
-            Navigator.pushAndRemoveUntil(
+            AppNavigator.pushAndRemoveUntil(
               context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    const MainNavigation(initialIndex: 0),
-                transitionDuration: const Duration(milliseconds: 400),
-                transitionsBuilder:
-                    (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-              ),
-              (route) => false,
+              const MainNavigation(initialIndex: 0),
             );
           }
         }

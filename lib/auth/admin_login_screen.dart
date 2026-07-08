@@ -9,6 +9,7 @@ import 'package:maucoffee/config/user_preference.dart';
 import 'package:maucoffee/model/user_model.dart';
 import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/navigation/navigation.dart';
+import 'package:maucoffee/ui/widget_sharing/page_route_helper.dart';
 import 'package:maucoffee/ui/color.dart';
 import 'package:maucoffee/ui/typography.dart';
 import 'package:maucoffee/ui/dimension.dart';
@@ -157,18 +158,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
         }
 
         if (mounted) {
-          Navigator.pushAndRemoveUntil(
+          AppNavigator.pushAndRemoveUntil(
             context,
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const MainNavigation(),
-              transitionDuration: const Duration(milliseconds: 400),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                    return FadeTransition(opacity: animation, child: child);
-                  },
-            ),
-            (route) => false,
+            const MainNavigation(),
           );
         }
       }

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:maucoffee/auth/admin_add_employee_screen.dart';
 import 'package:maucoffee/config/service_locator.dart';
+import 'package:maucoffee/ui/widget_sharing/page_route_helper.dart';
 import 'package:maucoffee/repository/employee_repository.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 import 'package:maucoffee/ui/color.dart';
@@ -165,30 +166,9 @@ class _AdminScanEmployeeScreenState extends State<AdminScanEmployeeScreen>
   }
 
   void _navigateToRegisterForm(String deviceUuid) {
-    Navigator.push(
+    AppNavigator.push(
       context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            AdminAddEmployeeScreen(deviceUuid: deviceUuid),
-        transitionDuration: const Duration(milliseconds: 400),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final fade = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOut,
-          );
-          final slide =
-              Tween<Offset>(
-                begin: const Offset(0, 0.06),
-                end: Offset.zero,
-              ).animate(
-                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-              );
-          return FadeTransition(
-            opacity: fade,
-            child: SlideTransition(position: slide, child: child),
-          );
-        },
-      ),
+      AdminAddEmployeeScreen(deviceUuid: deviceUuid),
     ).then((registered) {
       if (!mounted) return;
       if (registered == true) {

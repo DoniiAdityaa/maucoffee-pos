@@ -15,6 +15,7 @@ import 'package:maucoffee/ui/dimension.dart';
 import 'package:maucoffee/ui/widget_sharing/custom_snackbar.dart';
 import 'package:maucoffee/home/staff_list/admin_staff_management_screen.dart';
 import 'package:maucoffee/navigation/navigation.dart';
+import 'package:maucoffee/ui/widget_sharing/page_route_helper.dart';
 import 'package:maucoffee/repository/order_repository.dart';
 import 'package:maucoffee/repository/ingredient_repository.dart';
 import 'package:maucoffee/model/order_model.dart';
@@ -833,20 +834,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             GestureDetector(
               onTap: () {
                 HapticFeedback.lightImpact();
-                Navigator.push(
+                AppNavigator.push(
                   context,
-                  PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) =>
-                        const AdminStaffManagementScreen(),
-                    transitionDuration: const Duration(milliseconds: 400),
-                    transitionsBuilder:
-                        (context, animation, secondaryAnimation, child) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: child,
-                          );
-                        },
-                  ),
+                  const AdminStaffManagementScreen(),
                 );
               },
               child: Container(
@@ -870,20 +860,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             GestureDetector(
               onTap: () {
                 HapticFeedback.lightImpact();
-                Navigator.push(
+                AppNavigator.push(
                   context,
-                  PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) =>
-                        const AdminScanEmployeeScreen(),
-                    transitionDuration: const Duration(milliseconds: 400),
-                    transitionsBuilder:
-                        (context, animation, secondaryAnimation, child) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: child,
-                          );
-                        },
-                  ),
+                  const AdminScanEmployeeScreen(),
                 );
               },
               child: Container(
