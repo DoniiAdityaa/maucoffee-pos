@@ -224,7 +224,7 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
                 Positioned(
                   left: spacing4,
                   right: spacing4,
-                  bottom: (bottomPadding > 0 ? bottomPadding : spacing5) + 68,
+                  bottom: (bottomPadding > 0 ? bottomPadding : spacing4) + 8,
                   child: _buildCheckoutBar(),
                 ),
             ],
@@ -1271,59 +1271,66 @@ class _SalesTransactionScreenState extends State<SalesTransactionScreen> {
   }
 
   List<double> _getSuggestions(double totalPrice) {
-  final double T = totalPrice;
-  final List<double> suggestions = [];
+    final double T = totalPrice;
+    final List<double> suggestions = [];
 
-  // 1. Selalu sertakan uang pas
-  suggestions.add(T);
+    // 1. Selalu sertakan uang pas
+    suggestions.add(T);
 
-  // Pecahan uang standar Rupiah
-  final List<double> standardNotes = [2000, 5000, 10000, 20000, 50000, 100000];
+    // Pecahan uang standar Rupiah
+    final List<double> standardNotes = [
+      2000,
+      5000,
+      10000,
+      20000,
+      50000,
+      100000,
+    ];
 
-  // 2. Tambahkan pecahan standar yang lebih besar dari T
-  for (var note in standardNotes) {
-    if (note > T) {
-      suggestions.add(note);
+    // 2. Tambahkan pecahan standar yang lebih besar dari T
+    for (var note in standardNotes) {
+      if (note > T) {
+        suggestions.add(note);
+      }
     }
+
+    // 3. Tambahkan kelipatan bulat terdekat ke atas secara cerdas
+    if (T > 0) {
+      // Kelipatan 5.000 terdekat ke atas (jika T > 5000)
+      if (T > 5000) {
+        double next5k = ((T / 5000).ceil() * 5000).toDouble();
+        if (next5k > T) suggestions.add(next5k);
+      }
+
+      // Kelipatan 10.000 terdekat ke atas
+      double next10k = ((T / 10000).ceil() * 10000).toDouble();
+      if (next10k > T) suggestions.add(next10k);
+
+      // Kelipatan 20.000 terdekat ke atas
+      double next20k = ((T / 20000).ceil() * 20000).toDouble();
+      if (next20k > T) suggestions.add(next20k);
+
+      // Kelipatan 50.000 terdekat ke atas (jika T > 20000)
+      if (T > 20000) {
+        double next50k = ((T / 50000).ceil() * 50000).toDouble();
+        if (next50k > T) suggestions.add(next50k);
+      }
+
+      // Kelipatan 100.000 terdekat ke atas (jika T > 50000)
+      if (T > 50000) {
+        double next100k = ((T / 100000).ceil() * 100000).toDouble();
+        if (next100k > T) suggestions.add(next100k);
+      }
+    }
+
+    // Hapus duplikat, filter hanya nilai >= T, dan urutkan
+    final List<double> sorted = suggestions
+        .toSet()
+        .where((val) => val >= T)
+        .toList();
+    sorted.sort();
+
+    // Batasi maksimal 5 saran nominal agar UI tetap rapi
+    return sorted.take(5).toList();
   }
-
-  // 3. Tambahkan kelipatan bulat terdekat ke atas secara cerdas
-  if (T > 0) {
-    // Kelipatan 5.000 terdekat ke atas (jika T > 5000)
-    if (T > 5000) {
-      double next5k = ((T / 5000).ceil() * 5000).toDouble();
-      if (next5k > T) suggestions.add(next5k);
-    }
-
-    // Kelipatan 10.000 terdekat ke atas
-    double next10k = ((T / 10000).ceil() * 10000).toDouble();
-    if (next10k > T) suggestions.add(next10k);
-
-    // Kelipatan 20.000 terdekat ke atas
-    double next20k = ((T / 20000).ceil() * 20000).toDouble();
-    if (next20k > T) suggestions.add(next20k);
-
-    // Kelipatan 50.000 terdekat ke atas (jika T > 20000)
-    if (T > 20000) {
-      double next50k = ((T / 50000).ceil() * 50000).toDouble();
-      if (next50k > T) suggestions.add(next50k);
-    }
-
-    // Kelipatan 100.000 terdekat ke atas (jika T > 50000)
-    if (T > 50000) {
-      double next100k = ((T / 100000).ceil() * 100000).toDouble();
-      if (next100k > T) suggestions.add(next100k);
-    }
-  }
-
-  // Hapus duplikat, filter hanya nilai >= T, dan urutkan
-  final List<double> sorted = suggestions
-      .toSet()
-      .where((val) => val >= T)
-      .toList();
-  sorted.sort();
-
-  // Batasi maksimal 5 saran nominal agar UI tetap rapi
-  return sorted.take(5).toList();
-}
 }
