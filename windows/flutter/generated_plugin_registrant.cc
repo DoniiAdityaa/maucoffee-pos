@@ -13,6 +13,7 @@
 #include <firebase_core/firebase_core_plugin_c_api.h>
 #include <firebase_database/firebase_database_plugin_c_api.h>
 #include <permission_handler_windows/permission_handler_windows_plugin.h>
+#include <print_bluetooth_thermal/print_bluetooth_thermal_plugin_c_api.h>
 #include <url_launcher_windows/url_launcher_windows.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
@@ -30,6 +31,8 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("FirebaseDatabasePluginCApi"));
   PermissionHandlerWindowsPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("PermissionHandlerWindowsPlugin"));
+  PrintBluetoothThermalPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("PrintBluetoothThermalPluginCApi"));
   UrlLauncherWindowsRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("UrlLauncherWindows"));
 }

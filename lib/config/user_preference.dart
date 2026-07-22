@@ -118,4 +118,60 @@ class UserPreference {
     }
     return Supabase.instance.client.auth.currentUser?.id;
   }
+
+  // ── Preferensi Printer Thermal ──
+
+  // MAC Address / Device Address printer yang terhubung
+  Future<void> setPrinterAddress(String address) async {
+    await prefs.setString("printer_address", address);
+  }
+
+  String? getPrinterAddress() {
+    return prefs.getString("printer_address");
+  }
+
+  // Nama Printer (misal "PT-210")
+  Future<void> setPrinterName(String name) async {
+    await prefs.setString("printer_name", name);
+  }
+
+  String? getPrinterName() {
+    return prefs.getString("printer_name");
+  }
+
+  // Ukuran Kertas: 58 (58mm) atau 80 (80mm)
+  Future<void> setPrinterPaperSize(int size) async {
+    await prefs.setInt("printer_paper_size", size);
+  }
+
+  int getPrinterPaperSize() {
+    return prefs.getInt("printer_paper_size") ?? 58;
+  }
+
+  // Header Struk (Nama/Alamat Kafe)
+  Future<void> setReceiptHeader(String header) async {
+    await prefs.setString("receipt_header", header);
+  }
+
+  String getReceiptHeader() {
+    return prefs.getString("receipt_header") ?? "Maucoffee Kafe";
+  }
+
+  // Footer Struk (Pesan Penutup)
+  Future<void> setReceiptFooter(String footer) async {
+    await prefs.setString("receipt_footer", footer);
+  }
+
+  String getReceiptFooter() {
+    return prefs.getString("receipt_footer") ?? "Terima kasih atas kunjungan Anda!";
+  }
+
+  // Auto Print Setiap Transaksi Sukses (Checkout)
+  Future<void> setAutoPrintOnCheckout(bool enabled) async {
+    await prefs.setBool("auto_print_checkout", enabled);
+  }
+
+  bool isAutoPrintOnCheckout() {
+    return prefs.getBool("auto_print_checkout") ?? false;
+  }
 }

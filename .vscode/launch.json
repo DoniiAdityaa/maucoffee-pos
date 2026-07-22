@@ -25,6 +25,12 @@
       "type": "dart",
       "flutterMode": "release",
       "deviceId": "00008101-000230162212001E"
+    },
+    {
+      "name": "Mau Coffee (iOS Simulator)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "0F542023-D99E-48FC-96F4-B76662EE46B1"
     }
   ],
   "compounds": [

@@ -64,6 +64,10 @@
 	<string>Maucoffee perlu akses galeri foto untuk memilih gambar produk menu.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Maucoffee perlu izin untuk menyimpan foto ke galeri Anda.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Maucoffee memerlukan akses Bluetooth untuk mencetak struk belanja ke printer thermal.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Maucoffee memerlukan akses Bluetooth untuk terhubung dengan printer struk thermal.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
