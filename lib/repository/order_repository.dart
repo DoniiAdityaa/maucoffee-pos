@@ -87,7 +87,7 @@ class OrderRepository {
       final orderJson = order.toJson();
       orderJson.remove('id');
       if (order.createdAt != null) {
-        orderJson['created_at'] = order.createdAt!.toIso8601String();
+        orderJson['created_at'] = order.createdAt!.toUtc().toIso8601String();
       } else {
         orderJson.remove('created_at');
       }

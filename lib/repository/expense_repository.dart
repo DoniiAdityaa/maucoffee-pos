@@ -39,7 +39,7 @@ class ExpenseRepository {
 
       // Gunakan created_at dari model agar custom date dari user tersimpan
       if (expense.createdAt != null) {
-        json['created_at'] = expense.createdAt!.toIso8601String();
+        json['created_at'] = expense.createdAt!.toUtc().toIso8601String();
       } else {
         json.remove('created_at');
       }

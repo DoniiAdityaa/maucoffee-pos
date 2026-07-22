@@ -47,10 +47,12 @@ class _CatalogInventoryScreenState extends State<CatalogInventoryScreen>
   );
 
   // Kategori bahan baku
-  final List<String> _ingredientCategories = ["Semua", "Bubuk & Kopi", "Sirup"];
-
-  // // kategory menu penjualan
-  // final List<String> _menuCategories = ['Semua', 'coffee', 'milk', 'tea'];
+  final List<String> _ingredientCategories = [
+    "Semua",
+    "Bubuk & Kopi",
+    "Sirup",
+    'Milk',
+  ];
 
   @override
   void initState() {
